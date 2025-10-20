@@ -1,0 +1,262 @@
+2025-10-07 00:08:22,447 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/users?select=id&limit=1 "HTTP/2 401 Unauthorized"
+2025-10-07 00:08:22,447 - ERROR - Error conectando a Supabase: {'message': 'JSON could not be generated', 'code': 401, 'hint': 'Refer to full message for details', 'details': 'b\'{"message":"Invalid API key","hint":"Double check your Supabase `anon` or `service_role` API key."}\''}
+2025-10-07 00:08:22,447 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-10-07 00:08:22,447 - INFO - Inventario inicial sincronizado
+2025-10-07 00:08:22,463 - INFO - Base de datos inicializada correctamente
+2025-10-07 00:08:42,753 - INFO - Login exitoso para usuario: admin
+2025-10-07 00:08:43,812 - INFO - Usuario logueado: admin
+2025-10-07 00:08:43,814 - INFO - Iniciando sincronización de datos...
+2025-10-07 00:08:49,412 - INFO - Conexión a base de datos cerrada
+2025-10-14 20:37:46,614 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-10-14 20:37:46,614 - INFO - Inventario inicial sincronizado
+2025-10-14 20:37:46,620 - INFO - Base de datos inicializada correctamente
+2025-10-14 20:37:48,084 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-10-14 20:37:48,084 - INFO - Conexión a Supabase establecida
+2025-10-14 20:37:59,777 - INFO - Login exitoso: admin
+2025-10-14 20:37:59,777 - INFO - Usuario autenticado: admin
+2025-10-14 20:37:59,795 - ERROR - Error al mostrar ventana principal: 'nombre_completo'
+2025-10-14 20:37:59,870 - INFO - Conexión a base de datos cerrada
+2025-10-14 21:12:05,428 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-10-14 21:12:05,430 - INFO - Inventario inicial sincronizado
+2025-10-14 21:12:05,432 - INFO - Base de datos inicializada correctamente
+2025-10-14 21:12:07,244 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-10-14 21:12:07,244 - INFO - Conexión a Supabase establecida
+2025-10-14 21:12:13,825 - INFO - Login exitoso: admin
+2025-10-14 21:12:13,825 - INFO - Usuario autenticado: admin
+2025-10-14 21:12:13,835 - ERROR - Error al mostrar ventana principal: 'nombre_completo'
+2025-10-14 21:12:13,915 - INFO - Conexión a base de datos cerrada
+2025-10-14 21:13:04,780 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-10-14 21:13:04,789 - INFO - Inventario inicial sincronizado
+2025-10-14 21:13:04,789 - INFO - Base de datos inicializada correctamente
+2025-10-14 21:13:05,881 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-10-14 21:13:05,881 - INFO - Conexión a Supabase establecida
+2025-10-14 21:13:11,438 - INFO - Login exitoso: admin
+2025-10-14 21:13:11,438 - INFO - Usuario autenticado: admin
+2025-10-14 21:13:11,460 - ERROR - Error obteniendo total de miembros: no such column: estado
+2025-10-14 21:13:11,460 - ERROR - Error obteniendo miembros activos hoy: no such column: fecha_hora_entrada
+2025-10-14 21:13:18,411 - INFO - Cambio a pestaña: 1
+2025-10-14 21:13:19,179 - INFO - Cambio a pestaña: 2
+2025-10-14 21:13:20,224 - INFO - Cambio a pestaña: 3
+2025-10-14 21:13:23,530 - INFO - Cambio a pestaña: 0
+2025-10-14 21:13:24,330 - INFO - Cambio a pestaña: 2
+2025-10-14 21:13:32,074 - INFO - Cambio a pestaña: 0
+2025-10-14 21:14:14,081 - INFO - Cambio a pestaña: 1
+2025-10-14 21:14:14,858 - INFO - Cambio a pestaña: 2
+2025-10-14 21:14:15,359 - INFO - Cambio a pestaña: 3
+2025-10-14 21:14:16,424 - INFO - Cambio a pestaña: 0
+2025-10-14 21:14:19,145 - INFO - Cambio a pestaña: 1
+2025-10-14 21:14:19,648 - INFO - Cambio a pestaña: 2
+2025-10-14 21:14:20,139 - INFO - Cambio a pestaña: 3
+2025-10-14 21:14:21,300 - INFO - Cambio a pestaña: 0
+2025-10-14 21:14:34,261 - INFO - Conexión a base de datos cerrada
+2025-10-14 21:14:40,841 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-10-14 21:14:40,852 - INFO - Inventario inicial sincronizado
+2025-10-14 21:14:40,852 - INFO - Base de datos inicializada correctamente
+2025-10-14 21:14:41,994 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-10-14 21:14:41,994 - INFO - Conexión a Supabase establecida
+2025-10-14 21:14:47,781 - INFO - Login exitoso: admin
+2025-10-14 21:14:47,781 - INFO - Usuario autenticado: admin
+2025-10-14 21:37:29,945 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-10-14 21:37:29,945 - INFO - Inventario inicial sincronizado
+2025-10-14 21:37:29,945 - INFO - Base de datos inicializada correctamente
+2025-10-14 21:37:31,110 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-10-14 21:37:31,111 - INFO - Conexión a Supabase establecida
+2025-10-14 21:37:43,174 - INFO - Login exitoso: admin
+2025-10-14 21:37:43,175 - INFO - Usuario autenticado: admin
+2025-10-14 21:37:43,185 - WARNING - Fuente Quicksand no encontrada, usando Segoe UI
+2025-10-14 21:37:43,185 - WARNING - Fuente Arimo no encontrada, usando Segoe UI
+2025-10-14 21:38:05,105 - INFO - Cambio a pestaña: 3
+2025-10-14 21:38:12,708 - INFO - Cambio a pestaña: 0
+2025-10-14 21:38:13,337 - INFO - Cambio a pestaña: 1
+2025-10-14 21:38:13,792 - INFO - Cambio a pestaña: 2
+2025-10-14 21:38:14,342 - INFO - Cambio a pestaña: 1
+2025-10-14 21:38:14,855 - INFO - Cambio a pestaña: 2
+2025-10-14 21:38:23,453 - INFO - Cambio a pestaña: 0
+2025-10-14 21:38:48,284 - INFO - Cambio a pestaña: 1
+2025-10-14 21:38:48,929 - INFO - Cambio a pestaña: 2
+2025-10-14 21:38:49,864 - INFO - Cambio a pestaña: 0
+2025-10-14 21:38:50,351 - INFO - Cambio a pestaña: 1
+2025-10-14 21:38:50,881 - INFO - Cambio a pestaña: 2
+2025-10-14 21:38:53,998 - INFO - Cambio a pestaña: 0
+2025-10-14 22:25:18,030 - INFO - Cambio a pestaña: 1
+2025-10-14 22:25:18,789 - INFO - Cambio a pestaña: 2
+2025-10-14 22:25:20,273 - INFO - Cambio a pestaña: 3
+2025-10-14 22:25:21,979 - INFO - Cambio a pestaña: 1
+2025-10-14 22:25:22,520 - INFO - Cambio a pestaña: 2
+2025-10-14 22:25:23,311 - INFO - Cambio a pestaña: 1
+2025-10-14 22:25:24,035 - INFO - Cambio a pestaña: 0
+2025-10-14 22:25:24,646 - INFO - Cambio a pestaña: 1
+2025-10-14 22:25:25,251 - INFO - Cambio a pestaña: 0
+2025-10-14 22:32:44,605 - INFO - Conexión a base de datos cerrada
+2025-10-14 22:39:06,062 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-10-14 22:39:06,062 - INFO - Inventario inicial sincronizado
+2025-10-14 22:39:06,062 - INFO - Base de datos inicializada correctamente
+2025-10-14 22:39:07,474 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-10-14 22:39:07,475 - INFO - Conexión a Supabase establecida
+2025-10-14 22:39:18,388 - INFO - Login exitoso: admin
+2025-10-14 22:39:18,388 - INFO - Usuario autenticado: admin
+2025-10-14 22:39:18,405 - WARNING - Fuente Quicksand no encontrada, usando Segoe UI
+2025-10-14 22:39:18,406 - WARNING - Fuente Arimo no encontrada, usando Segoe UI
+2025-10-14 22:39:25,716 - INFO - Cambio a pestaña: 1
+2025-10-14 22:39:26,948 - INFO - Cambio a pestaña: 0
+2025-10-14 22:39:36,090 - INFO - Cambio a pestaña: 1
+2025-10-14 22:39:37,167 - INFO - Cambio a pestaña: 2
+2025-10-14 22:39:38,134 - INFO - Cambio a pestaña: 3
+2025-10-14 22:39:40,461 - INFO - Cambio a pestaña: 1
+2025-10-14 22:39:41,124 - INFO - Cambio a pestaña: 0
+2025-10-14 22:39:59,268 - INFO - Cambio a pestaña: 1
+2025-10-14 22:39:59,972 - INFO - Cambio a pestaña: 2
+2025-10-14 22:40:00,590 - INFO - Cambio a pestaña: 3
+2025-10-14 22:40:01,366 - INFO - Cambio a pestaña: 2
+2025-10-14 22:40:01,934 - INFO - Cambio a pestaña: 1
+2025-10-14 22:40:02,370 - INFO - Cambio a pestaña: 0
+2025-10-14 22:40:04,902 - INFO - Cambio a pestaña: 3
+2025-10-14 22:40:11,446 - INFO - Cambio a pestaña: 2
+2025-10-14 22:40:11,947 - INFO - Cambio a pestaña: 1
+2025-10-14 22:40:12,621 - INFO - Cambio a pestaña: 0
+2025-10-14 22:40:13,131 - INFO - Cambio a pestaña: 1
+2025-10-14 22:40:13,999 - INFO - Cambio a pestaña: 2
+2025-10-14 22:40:14,417 - INFO - Cambio a pestaña: 3
+2025-10-14 22:40:21,634 - INFO - Cambio a pestaña: 2
+2025-10-14 22:40:22,447 - INFO - Cambio a pestaña: 1
+2025-10-14 22:40:22,958 - INFO - Cambio a pestaña: 0
+2025-10-14 22:40:23,547 - INFO - Cambio a pestaña: 1
+2025-10-14 22:40:24,036 - INFO - Cambio a pestaña: 0
+2025-10-14 22:40:24,860 - INFO - Cambio a pestaña: 1
+2025-10-14 22:40:25,297 - INFO - Cambio a pestaña: 0
+2025-10-14 22:40:26,661 - INFO - Cambio a pestaña: 1
+2025-10-14 22:40:33,284 - INFO - Cambio a pestaña: 0
+2025-10-14 22:40:33,741 - INFO - Cambio a pestaña: 1
+2025-10-14 22:41:00,589 - INFO - Cambio a pestaña: 0
+2025-10-14 22:41:28,229 - INFO - Cambio a pestaña: 1
+2025-10-14 22:41:49,858 - INFO - Cambio a pestaña: 3
+2025-10-14 22:41:56,460 - INFO - Cambio a pestaña: 0
+2025-10-14 22:41:57,294 - INFO - Cambio a pestaña: 1
+2025-10-14 22:41:57,847 - INFO - Cambio a pestaña: 2
+2025-10-14 22:41:58,819 - INFO - Cambio a pestaña: 3
+2025-10-14 22:41:59,233 - INFO - Cambio a pestaña: 2
+2025-10-14 22:41:59,682 - INFO - Cambio a pestaña: 1
+2025-10-14 22:42:00,172 - INFO - Cambio a pestaña: 0
+2025-10-14 22:47:41,970 - INFO - Cambio a pestaña: 0
+2025-10-14 22:55:29,771 - INFO - Cambio a pestaña: 1
+2025-10-14 22:55:30,213 - INFO - Cambio a pestaña: 2
+2025-10-14 22:55:30,819 - INFO - Cambio a pestaña: 3
+2025-10-14 22:55:31,762 - INFO - Cambio a pestaña: 0
+2025-10-14 23:06:54,493 - INFO - Cambio a pestaña: 2
+2025-10-14 23:06:54,920 - INFO - Cambio a pestaña: 3
+2025-10-14 23:06:55,701 - INFO - Cambio a pestaña: 1
+2025-10-14 23:06:56,529 - INFO - Cambio a pestaña: 0
+2025-10-14 23:06:57,714 - INFO - Cambio a pestaña: 0
+2025-10-14 23:42:40,385 - INFO - Cambio a pestaña: 1
+2025-10-14 23:42:40,836 - INFO - Cambio a pestaña: 2
+2025-10-14 23:42:41,292 - INFO - Cambio a pestaña: 3
+2025-10-14 23:42:42,113 - INFO - Cambio a pestaña: 2
+2025-10-14 23:43:17,313 - INFO - Cambio a pestaña: 3
+2025-10-14 23:43:18,544 - INFO - Usuario admin cerró sesión
+2025-10-14 23:43:34,108 - INFO - Login exitoso: admin
+2025-10-14 23:43:34,108 - INFO - Usuario autenticado: admin
+2025-10-14 23:43:34,129 - WARNING - Fuente Quicksand no encontrada, usando Segoe UI
+2025-10-14 23:43:34,131 - WARNING - Fuente Arimo no encontrada, usando Segoe UI
+2025-10-14 23:43:41,956 - INFO - Cambio a pestaña: 1
+2025-10-14 23:43:42,533 - INFO - Cambio a pestaña: 2
+2025-10-14 23:43:43,033 - INFO - Cambio a pestaña: 3
+2025-10-14 23:43:45,721 - INFO - Cambio a pestaña: 1
+2025-10-14 23:43:46,404 - INFO - Cambio a pestaña: 0
+2025-10-14 23:43:47,288 - INFO - Cambio a pestaña: 1
+2025-10-14 23:43:47,639 - INFO - Cambio a pestaña: 2
+2025-10-14 23:43:48,089 - INFO - Cambio a pestaña: 3
+2025-10-14 23:44:08,495 - INFO - Usuario admin cerró sesión
+2025-10-14 23:44:42,955 - WARNING - Login fallido: asdfa
+2025-10-15 01:01:15,709 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-10-15 01:01:15,711 - INFO - Inventario inicial sincronizado
+2025-10-15 01:01:15,711 - INFO - Base de datos inicializada correctamente
+2025-10-15 01:01:17,271 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-10-15 01:01:17,271 - INFO - Conexión a Supabase establecida
+2025-10-15 01:01:26,136 - INFO - Login exitoso: admin
+2025-10-15 01:01:26,136 - INFO - Usuario autenticado: admin
+2025-10-15 01:01:26,153 - INFO - Usando Segoe UI como fuente principal
+2025-10-15 01:01:29,456 - INFO - Cambio a pestaña: 1
+2025-10-15 01:01:30,061 - INFO - Cambio a pestaña: 2
+2025-10-15 01:01:30,634 - INFO - Cambio a pestaña: 3
+2025-10-15 01:01:32,003 - INFO - Cambio a pestaña: 2
+2025-10-15 01:01:32,642 - INFO - Cambio a pestaña: 1
+2025-10-15 01:01:33,482 - INFO - Cambio a pestaña: 2
+2025-10-15 01:01:34,746 - INFO - Cambio a pestaña: 3
+2025-10-15 01:01:40,368 - INFO - Cambio a pestaña: 1
+2025-10-15 01:01:40,823 - INFO - Cambio a pestaña: 2
+2025-10-15 01:01:41,387 - INFO - Cambio a pestaña: 3
+2025-10-15 01:01:42,186 - INFO - Cambio a pestaña: 1
+2025-10-15 01:01:42,690 - INFO - Cambio a pestaña: 0
+2025-10-15 01:01:43,738 - INFO - Cambio a pestaña: 0
+2025-10-15 01:01:44,056 - INFO - Cambio a pestaña: 1
+2025-10-15 01:01:46,367 - INFO - Cambio a pestaña: 3
+2025-10-15 01:01:47,000 - INFO - Usuario admin cerró sesión
+2025-10-15 01:01:53,122 - INFO - Login exitoso: admin
+2025-10-15 01:01:53,122 - INFO - Usuario autenticado: admin
+2025-10-15 01:01:53,140 - INFO - Usando Segoe UI como fuente principal
+2025-10-15 01:02:00,122 - INFO - Cambio a pestaña: 1
+2025-10-15 01:02:00,596 - INFO - Cambio a pestaña: 2
+2025-10-15 01:02:01,065 - INFO - Cambio a pestaña: 2
+2025-10-15 01:02:01,833 - INFO - Cambio a pestaña: 0
+2025-10-15 01:02:39,422 - INFO - Cambio a pestaña: 3
+2025-10-15 01:04:14,924 - INFO - Cambio a pestaña: 2
+2025-10-15 01:04:15,496 - INFO - Cambio a pestaña: 3
+2025-10-15 01:07:27,398 - INFO - Conexión a base de datos cerrada
+2025-10-15 01:08:12,327 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-10-15 01:08:12,330 - INFO - Inventario inicial sincronizado
+2025-10-15 01:08:12,332 - INFO - Base de datos inicializada correctamente
+2025-10-15 01:08:13,406 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-10-15 01:08:13,406 - INFO - Conexión a Supabase establecida
+2025-10-15 01:08:20,370 - INFO - Login exitoso: admin
+2025-10-15 01:08:20,370 - INFO - Usuario autenticado: admin
+2025-10-15 01:08:20,392 - INFO - Usando Segoe UI como fuente principal
+2025-10-15 01:08:23,541 - INFO - Cambio a pestaña: 3
+2025-10-15 01:08:25,147 - INFO - Cambio a pestaña: 2
+2025-10-15 01:08:25,670 - INFO - Cambio a pestaña: 1
+2025-10-15 01:08:26,277 - INFO - Cambio a pestaña: 0
+2025-10-15 01:08:27,363 - INFO - Cambio a pestaña: 3
+2025-10-15 01:10:27,683 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-10-15 01:10:27,683 - INFO - Inventario inicial sincronizado
+2025-10-15 01:10:27,691 - INFO - Base de datos inicializada correctamente
+2025-10-15 01:10:28,721 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-10-15 01:10:28,721 - INFO - Conexión a Supabase establecida
+2025-10-15 01:10:39,805 - INFO - Login exitoso: admin
+2025-10-15 01:10:39,805 - INFO - Usuario autenticado: admin
+2025-10-15 01:10:39,820 - INFO - Usando Segoe UI como fuente principal
+2025-10-15 01:10:45,812 - INFO - Cambio a pestaña: 3
+2025-10-15 01:10:46,797 - INFO - Cambio a pestaña: 2
+2025-10-15 01:10:48,115 - INFO - Cambio a pestaña: 0
+2025-10-15 01:10:58,443 - INFO - Cambio a pestaña: 1
+2025-10-15 01:10:59,003 - INFO - Cambio a pestaña: 2
+2025-10-15 01:10:59,427 - INFO - Cambio a pestaña: 3
+2025-10-15 01:10:59,847 - INFO - Cambio a pestaña: 2
+2025-10-15 01:11:00,427 - INFO - Cambio a pestaña: 1
+2025-10-15 01:11:00,814 - INFO - Cambio a pestaña: 0
+2025-10-15 01:11:01,273 - INFO - Cambio a pestaña: 1
+2025-10-15 01:11:01,667 - INFO - Cambio a pestaña: 2
+2025-10-15 01:11:02,041 - INFO - Cambio a pestaña: 3
+2025-10-15 01:11:02,414 - INFO - Cambio a pestaña: 2
+2025-10-15 01:11:02,814 - INFO - Cambio a pestaña: 1
+2025-10-15 01:11:03,248 - INFO - Cambio a pestaña: 0
+2025-10-15 01:12:41,122 - INFO - Cambio a pestaña: 0
+2025-10-15 01:12:41,506 - INFO - Cambio a pestaña: 1
+2025-10-15 01:12:41,965 - INFO - Cambio a pestaña: 2
+2025-10-15 01:12:42,406 - INFO - Cambio a pestaña: 3
+2025-10-15 01:12:42,864 - INFO - Cambio a pestaña: 2
+2025-10-15 01:12:43,274 - INFO - Cambio a pestaña: 1
+2025-10-15 01:12:43,691 - INFO - Cambio a pestaña: 0
+2025-10-15 01:12:44,343 - INFO - Cambio a pestaña: 1
+2025-10-15 01:12:44,898 - INFO - Cambio a pestaña: 2
+2025-10-15 01:12:45,346 - INFO - Cambio a pestaña: 3
+2025-10-15 01:12:45,777 - INFO - Cambio a pestaña: 2
+2025-10-15 01:12:46,214 - INFO - Cambio a pestaña: 1
+2025-10-15 01:12:46,704 - INFO - Cambio a pestaña: 0
+2025-10-15 01:19:15,521 - INFO - Cambio a pestaña: 3
+2025-10-15 01:19:16,339 - INFO - Usuario admin cerró sesión
+2025-10-15 01:23:32,367 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-10-15 01:23:32,368 - INFO - Inventario inicial sincronizado
+2025-10-15 01:23:32,368 - INFO - Base de datos inicializada correctamente
+2025-10-15 01:23:33,743 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-10-15 01:23:33,743 - INFO - Conexión a Supabase establecida
+2025-10-15 01:23:36,614 - INFO - Conexión a base de datos cerrada
+2025-10-15 01:23:47,398 - INFO - Conexión a base de datos cerrada

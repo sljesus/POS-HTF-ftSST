@@ -1,0 +1,421 @@
+"""
+Ventana de Login Moderna con PySide6 para POS HTF
+Usando componentes reutilizables del sistema de diseño
+"""
+
+from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                               QLabel, QLineEdit, QPushButton, QFrame, QMessageBox)
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont
+import logging
+
+# Importar componentes del sistema de diseño
+from ui.components import WindowsPhoneTheme
+
+class LoginWindow(QMainWindow):
+    # Signal que se emite cuando el login es exitoso
+    login_success = Signal(dict)
+    
+    def __init__(self, db_manager=None, supabase_service=None):
+        super().__init__()
+        self.db_manager = db_manager
+        self.supabase_service = supabase_service
+        
+        # Usar colores del tema
+        self.PRIMARY_BLUE = WindowsPhoneTheme.PRIMARY_BLUE
+        self.SECONDARY_BLUE = "#2563eb"
+        self.ACCENT_RED = WindowsPhoneTheme.TILE_RED
+        self.HOVER_BLUE = WindowsPhoneTheme.TILE_BLUE
+        
+        # Usar fuente del tema
+        self.font_text = WindowsPhoneTheme.FONT_FAMILY
+        self.font_title = WindowsPhoneTheme.FONT_FAMILY
+        
+        self.setup_ui()
+        
+    def setup_ui(self):
+        """Configurar la interfaz de usuario"""
+        self.setWindowTitle("HTF Gimnasio - Sistema POS")
+        self.setFixedSize(1000, 600)
+        
+        # Widget central
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # Layout principal horizontal
+        main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Panel izquierdo - Branding
+        self.create_branding_panel(main_layout)
+        
+        # Panel derecho - Login
+        self.create_login_panel(main_layout)
+        
+        # Aplicar estilos
+        self.apply_styles()
+        
+        # Centrar ventana
+        self.center_window()
+        
+    def create_branding_panel(self, parent_layout):
+        """Crear panel izquierdo con branding"""
+        branding_frame = QFrame()
+        branding_frame.setObjectName("brandingPanel")
+        branding_frame.setMinimumWidth(400)
+        
+        layout = QVBoxLayout(branding_frame)
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setSpacing(20)
+        
+        # Logo/Título
+        title = QLabel("HTF")
+        title.setObjectName("brandingTitle")
+        title.setAlignment(Qt.AlignCenter)
+        title.setFont(QFont("Segoe UI", 72, QFont.Bold))
+        
+        subtitle = QLabel("GIMNASIO")
+        subtitle.setObjectName("brandingSubtitle")
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setFont(QFont("Segoe UI", 24, QFont.Light))
+        
+        description = QLabel("Sistema de Punto de Venta")
+        description.setObjectName("brandingDescription")
+        description.setAlignment(Qt.AlignCenter)
+        description.setFont(QFont("Segoe UI", 12))
+        
+        version = QLabel("v1.0.0")
+        version.setObjectName("brandingVersion")
+        version.setAlignment(Qt.AlignCenter)
+        version.setFont(QFont("Segoe UI", 10))
+        
+        layout.addStretch()
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+        layout.addSpacing(10)
+        layout.addWidget(description)
+        layout.addSpacing(20)
+        layout.addWidget(version)
+        layout.addStretch()
+        
+        parent_layout.addWidget(branding_frame)
+        
+    def create_login_panel(self, parent_layout):
+        """Crear panel derecho con formulario de login"""
+        login_frame = QFrame()
+        login_frame.setObjectName("loginPanel")
+        login_frame.setMinimumWidth(600)
+        
+        layout = QVBoxLayout(login_frame)
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setContentsMargins(80, 0, 80, 0)
+        layout.setSpacing(25)
+        
+        # Título del login
+        login_title = QLabel("Iniciar Sesión")
+        login_title.setObjectName("loginTitle")
+        login_title.setAlignment(Qt.AlignCenter)
+        login_title.setFont(QFont("Segoe UI", 28, QFont.Bold))
+        
+        # Indicador de conexión
+        self.connection_label = QLabel("🔴 Sin conexión")
+        self.connection_label.setObjectName("connectionLabel")
+        self.connection_label.setAlignment(Qt.AlignCenter)
+        self.connection_label.setFont(QFont("Segoe UI", 10))
+        self.update_connection_status()
+        
+        # Campo de usuario
+        user_label = QLabel("Usuario")
+        user_label.setObjectName("fieldLabel")
+        user_label.setFont(QFont("Segoe UI", 11))
+        
+        self.username_input = QLineEdit()
+        self.username_input.setObjectName("inputField")
+        self.username_input.setPlaceholderText("Ingresa tu usuario")
+        self.username_input.setMinimumHeight(50)
+        self.username_input.setFont(QFont("Segoe UI", 12))
+        self.username_input.returnPressed.connect(self.handle_login)
+        
+        # Campo de contraseña
+        password_label = QLabel("Contraseña")
+        password_label.setObjectName("fieldLabel")
+        password_label.setFont(QFont("Segoe UI", 11))
+        
+        self.password_input = QLineEdit()
+        self.password_input.setObjectName("inputField")
+        self.password_input.setPlaceholderText("Ingresa tu contraseña")
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.password_input.setMinimumHeight(50)
+        self.password_input.setFont(QFont("Segoe UI", 12))
+        self.password_input.returnPressed.connect(self.handle_login)
+        
+        # Botón de login
+        self.login_button = QPushButton("INICIAR SESIÓN")
+        self.login_button.setObjectName("loginButton")
+        self.login_button.setMinimumHeight(55)
+        self.login_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.login_button.setCursor(Qt.PointingHandCursor)
+        self.login_button.clicked.connect(self.handle_login)
+        
+        # Info de usuario por defecto
+        info_label = QLabel("Usuario: admin | Contraseña: admin123")
+        info_label.setObjectName("infoLabel")
+        info_label.setAlignment(Qt.AlignCenter)
+        info_label.setFont(QFont("Segoe UI", 9))
+        
+        # Agregar widgets al layout
+        layout.addWidget(login_title)
+        layout.addWidget(self.connection_label)
+        layout.addSpacing(20)
+        layout.addWidget(user_label)
+        layout.addWidget(self.username_input)
+        layout.addWidget(password_label)
+        layout.addWidget(self.password_input)
+        layout.addSpacing(10)
+        layout.addWidget(self.login_button)
+        layout.addSpacing(10)
+        layout.addWidget(info_label)
+        
+        parent_layout.addWidget(login_frame)
+        
+    def apply_styles(self):
+        """Aplicar estilos QSS con colores del logo HTF"""
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background-color: #f5f5f5;
+            }}
+            
+            #brandingPanel {{
+                background: {self.PRIMARY_BLUE};
+                border: none;
+            }}
+            
+            #brandingTitle {{
+                color: white;
+                font-weight: bold;
+                font-family: '{self.font_title}';
+            }}
+            
+            #brandingSubtitle {{
+                color: rgba(255, 255, 255, 0.95);
+                letter-spacing: 8px;
+                font-family: '{self.font_title}';
+            }}
+            
+            #brandingDescription {{
+                color: rgba(255, 255, 255, 0.8);
+                font-family: '{self.font_text}';
+            }}
+            
+            #brandingVersion {{
+                color: rgba(255, 255, 255, 0.6);
+                font-family: '{self.font_text}';
+            }}
+            
+            #loginPanel {{
+                background-color: white;
+                border: none;
+            }}
+            
+            #loginTitle {{
+                color: {self.PRIMARY_BLUE};
+                margin-bottom: 10px;
+                font-family: '{self.font_title}';
+                font-weight: bold;
+            }}
+            
+            #connectionLabel {{
+                color: #718096;
+                padding: 8px 16px;
+                background-color: #f0f9ff;
+                border-radius: 20px;
+                font-family: '{self.font_text}';
+            }}
+            
+            #fieldLabel {{
+                color: #374151;
+                margin-bottom: 5px;
+                font-family: '{self.font_text}';
+                font-weight: 600;
+            }}
+            
+            #inputField {{
+                padding: 12px 16px;
+                border: 2px solid #d1d5db;
+                border-radius: 6px;
+                background-color: white;
+                color: #1f2937;
+                font-family: '{self.font_text}';
+                font-size: 14px;
+            }}
+            
+            #inputField:focus {{
+                border: 2px solid {self.PRIMARY_BLUE};
+                background-color: white;
+            }}
+            
+            #loginButton {{
+                background: {self.PRIMARY_BLUE};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 15px;
+                margin-top: 10px;
+                font-family: '{self.font_text}';
+                font-weight: bold;
+                font-size: 14px;
+            }}
+            
+            #loginButton:hover {{
+                background: {self.HOVER_BLUE};
+            }}
+            
+            #loginButton:pressed {{
+                background: {self.SECONDARY_BLUE};
+            }}
+            
+            #infoLabel {{
+                color: #9ca3af;
+                font-style: italic;
+                font-family: '{self.font_text}';
+            }}
+        """)
+        
+    def center_window(self):
+        """Centrar la ventana en la pantalla"""
+        screen = self.screen().geometry()
+        window = self.frameGeometry()
+        x = (screen.width() - window.width()) // 2
+        y = (screen.height() - window.height()) // 2
+        self.move(x, y)
+        
+    def update_connection_status(self):
+        """Actualizar el indicador de conexión"""
+        if self.supabase_service and self.supabase_service.test_connection():
+            self.connection_label.setText("🟢 Conectado a Supabase")
+            self.connection_label.setStyleSheet("""
+                color: #38a169;
+                background-color: #f0fff4;
+                padding: 8px 16px;
+                border-radius: 20px;
+            """)
+        else:
+            self.connection_label.setText("🟡 Modo Offline")
+            self.connection_label.setStyleSheet("""
+                color: #d69e2e;
+                background-color: #fffff0;
+                padding: 8px 16px;
+                border-radius: 20px;
+            """)
+            
+    def handle_login(self):
+        """Manejar el evento de login"""
+        username = self.username_input.text().strip()
+        password = self.password_input.text().strip()
+        
+        if not username:
+            self.show_error("Por favor ingresa tu usuario")
+            self.username_input.setFocus()
+            return
+            
+        if not password:
+            self.show_error("Por favor ingresa tu contraseña")
+            self.password_input.setFocus()
+            return
+        
+        # Deshabilitar botón mientras se procesa
+        self.login_button.setEnabled(False)
+        self.login_button.setText("VERIFICANDO...")
+        
+        try:
+            # Autenticar en base de datos local
+            user = self.db_manager.authenticate_user(username, password)
+            
+            if user:
+                logging.info(f"Login exitoso: {username}")
+                
+                # Mostrar mensaje de éxito
+                self.login_button.setText("✓ ACCESO CONCEDIDO")
+                self.login_button.setStyleSheet("""
+                    background: qlineargradient(
+                        x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #48bb78,
+                        stop:1 #38a169
+                    );
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    padding: 15px;
+                """)
+                
+                # Emitir señal de login exitoso
+                self.login_success.emit(user)
+                
+                # Cerrar ventana de login
+                self.close()
+            else:
+                logging.warning(f"Login fallido: {username}")
+                self.show_error("Usuario o contraseña incorrectos")
+                self.password_input.clear()
+                self.password_input.setFocus()
+                
+        except Exception as e:
+            logging.error(f"Error en login: {e}")
+            self.show_error(f"Error inesperado: {str(e)}")
+        
+        finally:
+            # Rehabilitar botón
+            self.login_button.setEnabled(True)
+            self.login_button.setText("INICIAR SESIÓN")
+            self.login_button.setStyleSheet("")  # Restaurar estilo original
+            
+    def show_error(self, message):
+        """Mostrar mensaje de error"""
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Critical)
+        msg.setWindowTitle("Error")
+        msg.setText(message)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: white;
+            }
+            QPushButton {
+                background-color: #667eea;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #5568d3;
+            }
+        """)
+        msg.exec()
+        
+    def show_success(self, message):
+        """Mostrar mensaje de éxito"""
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Information)
+        msg.setWindowTitle("Éxito")
+        msg.setText(message)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: white;
+            }
+            QPushButton {
+                background-color: #48bb78;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #38a169;
+            }
+        """)
+        msg.exec()
