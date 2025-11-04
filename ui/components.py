@@ -4,7 +4,7 @@ Sistema de diseño unificado para toda la aplicación HTF POS
 """
 
 from PySide6.QtWidgets import (
-    QPushButton, QLabel, QFrame, QVBoxLayout, QHBoxLayout, QWidget
+    QPushButton, QLabel, QFrame, QVBoxLayout, QHBoxLayout, QWidget, QDialog
 )
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QFont, QCursor
@@ -84,11 +84,17 @@ class TileButton(QPushButton):
         if icon_name:
             icon_label = QLabel()
             icon_label.setAlignment(Qt.AlignCenter)
-            icon_label.setPixmap(
-                qta.icon(icon_name, color='white').pixmap(
-                    QSize(WindowsPhoneTheme.ICON_SIZE_LARGE, WindowsPhoneTheme.ICON_SIZE_LARGE)
+            try:
+                icon_label.setPixmap(
+                    qta.icon(icon_name, color='white').pixmap(
+                        QSize(WindowsPhoneTheme.ICON_SIZE_LARGE, WindowsPhoneTheme.ICON_SIZE_LARGE)
+                    )
                 )
-            )
+            except Exception as e:
+                # Fallback: usar emoji si qtawesome falla
+                icon_label.setText("⚙")
+                icon_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 48))
+                icon_label.setStyleSheet("color: white;")
             icon_label.setObjectName("tileIcon")
             layout.addWidget(icon_label)
         
@@ -105,7 +111,7 @@ class TileButton(QPushButton):
 class InfoTile(QFrame):
     """Tile informativo estilo Windows Phone con icono, título y datos"""
     
-    def __init__(self, title, icon_name, color=WindowsPhoneTheme.TILE_BLUE, parent=None):
+    def __init__(self, title, icon_name=None, color=WindowsPhoneTheme.TILE_BLUE, parent=None):
         super().__init__(parent)
         
         self.setObjectName("infoTile")
@@ -113,25 +119,33 @@ class InfoTile(QFrame):
         self.setMinimumHeight(180)
         
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(25, 25, 25, 25)
-        self.main_layout.setSpacing(15)
+        self.main_layout.setContentsMargins(25, 30, 25, 30)
+        self.main_layout.setSpacing(18)
+        self.main_layout.setAlignment(Qt.AlignCenter)
         
-        # Icono grande
-        self.icon_label = QLabel()
-        self.icon_label.setAlignment(Qt.AlignCenter)
-        self.icon_label.setPixmap(
-            qta.icon(icon_name, color='white').pixmap(
-                QSize(WindowsPhoneTheme.ICON_SIZE_MEDIUM, WindowsPhoneTheme.ICON_SIZE_MEDIUM)
-            )
-        )
-        self.main_layout.addWidget(self.icon_label)
+        # Icono grande (opcional)
+        if icon_name:
+            self.icon_label = QLabel()
+            self.icon_label.setAlignment(Qt.AlignCenter)
+            try:
+                self.icon_label.setPixmap(
+                    qta.icon(icon_name, color='white').pixmap(
+                        QSize(WindowsPhoneTheme.ICON_SIZE_LARGE, WindowsPhoneTheme.ICON_SIZE_LARGE)
+                    )
+                )
+            except:
+                # Si falla el icono, mostrar emoji
+                self.icon_label.setText("💰")
+                self.icon_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 48))
+                self.icon_label.setStyleSheet("color: white;")
+            self.main_layout.addWidget(self.icon_label, 0, Qt.AlignCenter)
         
         # Título del tile
         self.title_label = QLabel(title)
         self.title_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_SUBTITLE, QFont.Bold))
         self.title_label.setAlignment(Qt.AlignCenter)
         self.title_label.setStyleSheet("color: white;")
-        self.main_layout.addWidget(self.title_label)
+        self.main_layout.addWidget(self.title_label, 0, Qt.AlignCenter)
     
     def add_main_value(self, value):
         """Agregar valor principal grande"""
@@ -139,7 +153,7 @@ class InfoTile(QFrame):
         value_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_XLARGE, QFont.Bold))
         value_label.setAlignment(Qt.AlignCenter)
         value_label.setStyleSheet("color: white;")
-        self.main_layout.addWidget(value_label)
+        self.main_layout.addWidget(value_label, 0, Qt.AlignCenter)
         return value_label
     
     def add_secondary_value(self, text):
@@ -148,7 +162,7 @@ class InfoTile(QFrame):
         secondary_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
         secondary_label.setAlignment(Qt.AlignCenter)
         secondary_label.setStyleSheet("color: rgba(255, 255, 255, 0.9);")
-        self.main_layout.addWidget(secondary_label)
+        self.main_layout.addWidget(secondary_label, 0, Qt.AlignCenter)
         return secondary_label
     
     def add_stretch(self):
@@ -216,10 +230,10 @@ class TopBar(QFrame):
                                  WindowsPhoneTheme.MARGIN_LARGE, WindowsPhoneTheme.MARGIN_SMALL)
         
         # Título
-        title_label = QLabel(title)
-        title_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_LARGE, QFont.Bold))
-        title_label.setObjectName("titleLabel")
-        layout.addWidget(title_label)
+        self.title_label = QLabel(title)
+        self.title_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_LARGE, QFont.Bold))
+        self.title_label.setObjectName("titleLabel")
+        layout.addWidget(self.title_label)
         
         layout.addStretch()
         
@@ -228,6 +242,80 @@ class TopBar(QFrame):
         user_info.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_SMALL))
         user_info.setObjectName("userInfo")
         layout.addWidget(user_info)
+        
+    def set_title(self, new_title):
+        """Actualizar el título de la barra superior"""
+        self.title_label.setText(new_title)
+
+
+class StyledLabel(QLabel):
+    """Label con estilo Windows Phone consistente"""
+    
+    def __init__(self, text="", bold=False, size=WindowsPhoneTheme.FONT_SIZE_NORMAL, parent=None):
+        super().__init__(text, parent)
+        
+        weight = QFont.Bold if bold else QFont.Normal
+        self.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, size, weight))
+        self.setObjectName("styledLabel")
+
+
+class ContentPanel(QFrame):
+    """Panel de contenido con estilo Windows Phone"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+        self.setObjectName("contentPanel")
+        self.setFrameShape(QFrame.NoFrame)
+
+
+class SearchBar(QWidget):
+    """Barra de búsqueda estilo Windows Phone con icono"""
+    
+    def __init__(self, placeholder="Buscar...", parent=None):
+        super().__init__(parent)
+        
+        from PySide6.QtWidgets import QLineEdit
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+        
+        # Input de búsqueda
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText(placeholder)
+        self.search_input.setMinimumHeight(45)
+        layout.addWidget(self.search_input)
+        
+        # Botón de búsqueda con icono Font Awesome
+        self.search_button = QPushButton(" Buscar")
+        self.search_button.setObjectName("tileButton")
+        self.search_button.setProperty("tileColor", WindowsPhoneTheme.TILE_BLUE)
+        self.search_button.setCursor(QCursor(Qt.PointingHandCursor))
+        self.search_button.setMinimumWidth(120)
+        self.search_button.setMaximumWidth(120)
+        self.search_button.setMinimumHeight(45)
+        self.search_button.setMaximumHeight(45)
+        self.search_button.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 11, QFont.Bold))
+        self.search_button.setStyleSheet("color: white;")
+        
+        # Icono Font Awesome
+        try:
+            self.search_button.setIcon(qta.icon('fa5s.search', color='white'))
+            self.search_button.setIconSize(QSize(16, 16))
+        except:
+            pass  # Si falla, solo mostrar texto
+        
+        layout.addWidget(self.search_button)
+    
+    def text(self):
+        """Obtener texto del input"""
+        return self.search_input.text()
+    
+    def connect_search(self, slot):
+        """Conectar señal de búsqueda"""
+        self.search_input.textChanged.connect(slot)
+        self.search_button.clicked.connect(slot)
 
 
 def apply_windows_phone_stylesheet(widget):
@@ -409,7 +497,83 @@ def apply_windows_phone_stylesheet(widget):
             background-color: {theme.BG_LIGHT};
         }}
         
+        /* Panels de contenido */
+        QFrame#contentPanel {{
+            background-color: white;
+            border: none;
+            border-radius: 0px;
+        }}
+        
+        /* Labels estilizados */
+        QLabel#styledLabel {{
+            color: #333333;
+            background: transparent;
+        }}
+        
         /* Diálogos y ventanas emergentes */
+        #alertDialog {{
+            background-color: white;
+            border: 4px solid rgba(15, 23, 42, 0.15);
+        }}
+
+        #dialogHeader {{
+            background-color: {theme.PRIMARY_BLUE};
+        }}
+
+        #dialogTitle {{
+            color: white;
+            font-family: '{theme.FONT_FAMILY}';
+            font-weight: bold;
+            background: transparent;
+        }}
+
+        #dialogMessage {{
+            color: #1f2937;
+            background: transparent;
+            font-family: '{theme.FONT_FAMILY}';
+        }}
+
+        #dialogDetail {{
+            color: #374151;
+            background: transparent;
+            font-family: '{theme.FONT_FAMILY}';
+            font-size: {theme.FONT_SIZE_SMALL}px;
+            border-left: 4px solid rgba(30, 58, 138, 0.25);
+            padding-left: 12px;
+        }}
+
+        #dialogPrimaryButton {{
+            background-color: {theme.PRIMARY_BLUE};
+            color: white;
+            border: none;
+            border-radius: 0px;
+            padding: 12px 28px;
+            font-family: '{theme.FONT_FAMILY}';
+            font-weight: bold;
+        }}
+
+        #dialogPrimaryButton:hover {{
+            opacity: 0.88;
+        }}
+
+        #dialogPrimaryButton:pressed {{
+            opacity: 0.78;
+        }}
+
+        #dialogSecondaryButton {{
+            background-color: transparent;
+            color: {theme.PRIMARY_BLUE};
+            border: 3px solid rgba(30, 58, 138, 0.35);
+            border-radius: 0px;
+            padding: 11px 26px;
+            font-family: '{theme.FONT_FAMILY}';
+            font-weight: bold;
+        }}
+
+        #dialogSecondaryButton:hover {{
+            background-color: rgba(30, 58, 138, 0.08);
+        }}
+
         QDialog {{
             background-color: {theme.BG_LIGHT};
         }}
@@ -535,3 +699,196 @@ def create_tile_grid_layout():
     grid.setContentsMargins(0, WindowsPhoneTheme.MARGIN_SMALL, 0, 0)
     
     return grid
+
+
+class AlertDialog(QDialog):
+    """Diálogo de alerta personalizado con estética Windows Phone"""
+
+    ICON_MAP = {
+        "info": ("fa5s.info-circle", WindowsPhoneTheme.TILE_BLUE),
+        "success": ("fa5s.check-circle", WindowsPhoneTheme.TILE_GREEN),
+        "warning": ("fa5s.exclamation-triangle", WindowsPhoneTheme.TILE_ORANGE),
+        "error": ("fa5s.times-circle", WindowsPhoneTheme.TILE_RED),
+        "question": ("fa5s.question-circle", WindowsPhoneTheme.TILE_BLUE),
+    }
+
+    def __init__(
+        self,
+        title,
+        message,
+        dialog_type="info",
+        parent=None,
+        detail=None,
+        primary_text="Aceptar",
+        secondary_text=None
+    ):
+        super().__init__(parent)
+        self.setObjectName("alertDialog")
+        self.setModal(True)
+        self.setWindowTitle(title)
+        self.setMinimumWidth(420)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+
+        self._dialog_type = dialog_type
+
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        header_frame = QFrame()
+        header_frame.setObjectName("dialogHeader")
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(28, 24, 28, 24)
+        header_layout.setSpacing(18)
+
+        icon_label = QLabel()
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setFixedSize(60, 60)
+
+        icon_name, color = self.ICON_MAP.get(dialog_type, self.ICON_MAP["info"])
+        try:
+            icon_label.setPixmap(
+                qta.icon(icon_name, color="white").pixmap(QSize(48, 48))
+            )
+        except Exception:
+            icon_label.setText("⚠")
+            icon_label.setStyleSheet("color: white; font-size: 42px;")
+
+        header_layout.addWidget(icon_label, 0, Qt.AlignCenter)
+
+        title_label = QLabel(title.upper())
+        title_label.setObjectName("dialogTitle")
+        title_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_LARGE, QFont.Bold))
+        title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+
+        root_layout.addWidget(header_frame)
+
+        content_frame = QFrame()
+        content_layout = QVBoxLayout(content_frame)
+        content_layout.setContentsMargins(32, 28, 32, 28)
+        content_layout.setSpacing(16)
+
+        message_label = QLabel(message)
+        message_label.setObjectName("dialogMessage")
+        message_label.setWordWrap(True)
+        message_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        content_layout.addWidget(message_label)
+
+        if detail:
+            detail_label = QLabel(detail)
+            detail_label.setObjectName("dialogDetail")
+            detail_label.setWordWrap(True)
+            content_layout.addWidget(detail_label)
+
+        content_layout.addStretch()
+
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(14)
+        buttons_layout.addStretch()
+
+        if secondary_text:
+            secondary_button = QPushButton(secondary_text)
+            secondary_button.setObjectName("dialogSecondaryButton")
+            secondary_button.clicked.connect(self.reject)
+            buttons_layout.addWidget(secondary_button)
+        else:
+            secondary_button = None
+
+        primary_button = QPushButton(primary_text)
+        primary_button.setObjectName("dialogPrimaryButton")
+        primary_button.clicked.connect(self.accept)
+        buttons_layout.addWidget(primary_button)
+
+        content_layout.addLayout(buttons_layout)
+        root_layout.addWidget(content_frame)
+
+        self._primary_button = primary_button
+        self._secondary_button = secondary_button
+        self._header_frame = header_frame
+
+        self._apply_type_styles(dialog_type, color)
+
+    def _apply_type_styles(self, dialog_type, color):
+        """Aplicar color de acento según el tipo de diálogo"""
+        accent_color = color
+        self._primary_button.setStyleSheet(
+            f"background-color: {accent_color}; color: white;"
+        )
+        if self._secondary_button:
+            self._secondary_button.setStyleSheet(
+                f"color: {accent_color}; border-color: rgba(30, 58, 138, 0.35);"
+            )
+        self._header_frame.setStyleSheet(f"background-color: {accent_color};")
+
+    @classmethod
+    def show_info(cls, parent, title, message, detail=None, button_text="Entendido"):
+        cls(title, message, "info", parent, detail, button_text).exec()
+
+    @classmethod
+    def show_success(cls, parent, title, message, detail=None, button_text="Perfecto"):
+        cls(title, message, "success", parent, detail, button_text).exec()
+
+    @classmethod
+    def show_warning(cls, parent, title, message, detail=None, button_text="Revisar"):
+        cls(title, message, "warning", parent, detail, button_text).exec()
+
+    @classmethod
+    def show_error(cls, parent, title, message, detail=None, button_text="Cerrar"):
+        cls(title, message, "error", parent, detail, button_text).exec()
+
+    @classmethod
+    def ask_confirmation(
+        cls,
+        parent,
+        title,
+        message,
+        detail=None,
+        confirm_text="Sí",
+        cancel_text="No"
+    ):
+        dialog = cls(
+            title,
+            message,
+            "question",
+            parent,
+            detail,
+            confirm_text,
+            cancel_text
+        )
+        return dialog.exec() == QDialog.Accepted
+
+
+def show_info_dialog(parent, title, message, detail=None, button_text="Entendido"):
+    AlertDialog.show_info(parent, title, message, detail, button_text)
+
+
+def show_success_dialog(parent, title, message, detail=None, button_text="Perfecto"):
+    AlertDialog.show_success(parent, title, message, detail, button_text)
+
+
+def show_warning_dialog(parent, title, message, detail=None, button_text="Revisar"):
+    AlertDialog.show_warning(parent, title, message, detail, button_text)
+
+
+def show_error_dialog(parent, title, message, detail=None, button_text="Cerrar"):
+    AlertDialog.show_error(parent, title, message, detail, button_text)
+
+
+def show_confirmation_dialog(
+    parent,
+    title,
+    message,
+    detail=None,
+    confirm_text="Sí",
+    cancel_text="No"
+):
+    return AlertDialog.ask_confirmation(
+        parent,
+        title,
+        message,
+        detail,
+        confirm_text,
+        cancel_text
+    )

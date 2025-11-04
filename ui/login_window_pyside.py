@@ -4,13 +4,18 @@ Usando componentes reutilizables del sistema de diseño
 """
 
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                               QLabel, QLineEdit, QPushButton, QFrame, QMessageBox)
+                               QLabel, QLineEdit, QPushButton, QFrame)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 import logging
 
 # Importar componentes del sistema de diseño
-from ui.components import WindowsPhoneTheme
+from ui.components import (
+    WindowsPhoneTheme,
+    show_error_dialog,
+    show_info_dialog,
+    show_success_dialog
+)
 
 class LoginWindow(QMainWindow):
     # Signal que se emite cuando el login es exitoso
@@ -372,50 +377,8 @@ class LoginWindow(QMainWindow):
             
     def show_error(self, message):
         """Mostrar mensaje de error"""
-        msg = QMessageBox(self)
-        msg.setIcon(QMessageBox.Critical)
-        msg.setWindowTitle("Error")
-        msg.setText(message)
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: white;
-            }
-            QPushButton {
-                background-color: #667eea;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 8px 16px;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #5568d3;
-            }
-        """)
-        msg.exec()
+        show_error_dialog(self, "Error", message)
         
     def show_success(self, message):
         """Mostrar mensaje de éxito"""
-        msg = QMessageBox(self)
-        msg.setIcon(QMessageBox.Information)
-        msg.setWindowTitle("Éxito")
-        msg.setText(message)
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: white;
-            }
-            QPushButton {
-                background-color: #48bb78;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 8px 16px;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #38a169;
-            }
-        """)
-        msg.exec()
+        show_success_dialog(self, "Éxito", message)

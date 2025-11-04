@@ -76,7 +76,27 @@ class DatabaseManager:
             )
         ''')
         
-        # 3. Tabla de productos varios (POS)
+        # 3. Tabla de personal
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS personal (
+                id_personal INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombres TEXT NOT NULL,
+                apellido_paterno TEXT NOT NULL,
+                apellido_materno TEXT NOT NULL,
+                telefono TEXT,
+                email TEXT,
+                rol TEXT NOT NULL,
+                numero_empleado TEXT UNIQUE,
+                codigo_qr TEXT NOT NULL UNIQUE,
+                activo BOOLEAN DEFAULT 1,
+                fecha_contratacion DATE DEFAULT CURRENT_DATE,
+                fecha_baja DATE,
+                supabase_id INTEGER,
+                needs_sync BOOLEAN DEFAULT 1
+            )
+        ''')
+        
+        # 4. Tabla de productos varios (POS)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS ca_productos_varios (
                 id_producto INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,7 +117,7 @@ class DatabaseManager:
             )
         ''')
         
-        # 4. Tabla de suplementos (POS)
+        # 5. Tabla de suplementos (POS)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS ca_suplementos (
                 id_suplemento INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -230,7 +250,43 @@ class DatabaseManager:
             )
         ''')
         
-        # 10. Tabla de turnos de caja
+        # 10. Tabla de lockers
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lockers (
+                id_locker INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero TEXT NOT NULL UNIQUE,
+                ubicacion TEXT NOT NULL DEFAULT 'Zona Lockers',
+                tipo TEXT NOT NULL DEFAULT 'estándar',
+                requiere_llave BOOLEAN NOT NULL DEFAULT 1,
+                activo BOOLEAN NOT NULL DEFAULT 1,
+                supabase_id INTEGER,
+                needs_sync BOOLEAN DEFAULT 0
+            )
+        ''')
+        
+        # 11. Tabla de costos de productos
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS costos_productos (
+                id_costo INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo_interno TEXT NOT NULL UNIQUE,
+                tipo_producto TEXT NOT NULL,
+                precio_compra REAL NOT NULL CHECK (precio_compra >= 0),
+                precio_compra_anterior REAL,
+                moneda TEXT DEFAULT 'MXN',
+                proveedor TEXT,
+                codigo_proveedor TEXT,
+                fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                ultima_compra DATE,
+                proxima_compra_estimada DATE,
+                categoria_contable TEXT,
+                cuenta_contable TEXT,
+                activo BOOLEAN NOT NULL DEFAULT 1,
+                supabase_id INTEGER,
+                needs_sync BOOLEAN DEFAULT 0
+            )
+        ''')
+        
+        # 12. Tabla de turnos de caja
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS turnos_caja (
                 id_turno INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -252,7 +308,7 @@ class DatabaseManager:
             )
         ''')
         
-        # 11. Tabla de registro de entradas
+        # 13. Tabla de registro de entradas
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS registro_entradas (
                 id_entrada INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -274,7 +330,7 @@ class DatabaseManager:
             )
         ''')
         
-        # 12. Tabla de sincronización
+        # 14. Tabla de sincronización
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sync_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -434,22 +490,30 @@ class DatabaseManager:
             return None
     
     def get_all_products(self):
-        """Obtener todos los productos activos (varios y suplementos)"""
+        """Obtener todos los productos activos con stock"""
         try:
             cursor = self.connection.cursor()
             
-            # Obtener productos varios
+            # Obtener productos varios con inventario
             cursor.execute('''
-                SELECT 'varios' as tipo, codigo_interno, nombre, descripcion, precio_venta, categoria
-                FROM ca_productos_varios 
-                WHERE activo = 1 
-                UNION ALL
-                SELECT 'suplemento' as tipo, codigo_interno, nombre, descripcion, precio_venta, marca as categoria
-                FROM ca_suplementos 
-                WHERE activo = 1
-                ORDER BY nombre
+                SELECT 
+                    p.id_producto,
+                    p.codigo_interno,
+                    p.codigo_barras,
+                    p.nombre,
+                    p.descripcion,
+                    p.precio_venta,
+                    p.categoria,
+                    COALESCE(i.stock_actual, 0) as stock_actual,
+                    p.activo
+                FROM ca_productos_varios p
+                LEFT JOIN inventario i ON p.codigo_interno = i.codigo_interno
+                WHERE p.activo = 1
+                ORDER BY p.nombre
             ''')
-            return cursor.fetchall()
+            
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
         
         except Exception as e:
             logging.error(f"Error obteniendo productos: {e}")
@@ -613,3 +677,230 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f'Error obteniendo miembros activos hoy: {e}')
             return 0
+    
+    # ========== MÉTODOS DE VENTAS ==========
+    
+    def search_products(self, search_text):
+        """Buscar productos por código o nombre"""
+        try:
+            cursor = self.connection.cursor()
+            search_pattern = f"%{search_text}%"
+            
+            cursor.execute('''
+                SELECT 
+                    p.id_producto,
+                    p.codigo_interno,
+                    p.codigo_barras,
+                    p.nombre,
+                    p.descripcion,
+                    p.precio_venta,
+                    p.categoria,
+                    COALESCE(i.stock_actual, 0) as stock_actual,
+                    p.activo
+                FROM ca_productos_varios p
+                LEFT JOIN inventario i ON p.codigo_interno = i.codigo_interno
+                WHERE p.activo = 1 
+                AND (
+                    p.nombre LIKE ? OR 
+                    p.codigo_barras LIKE ? OR
+                    p.codigo_interno LIKE ? OR
+                    CAST(p.id_producto AS TEXT) LIKE ?
+                )
+                ORDER BY p.nombre
+            ''', (search_pattern, search_pattern, search_pattern, search_pattern))
+            
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
+            
+        except Exception as e:
+            logging.error(f"Error buscando productos: {e}")
+            return []
+    
+    def create_sale(self, venta_data):
+        """Crear nueva venta"""
+        try:
+            cursor = self.connection.cursor()
+            
+            # Iniciar transacción
+            cursor.execute('BEGIN TRANSACTION')
+            
+            # Insertar venta
+            cursor.execute('''
+                INSERT INTO ventas (
+                    fecha,
+                    total,
+                    id_usuario
+                ) VALUES (?, ?, ?)
+            ''', (
+                venta_data['fecha_venta'],
+                venta_data['total'],
+                venta_data['id_usuario']
+            ))
+            
+            venta_id = cursor.lastrowid
+            
+            # Insertar items de venta y actualizar stock
+            for item in venta_data['productos']:
+                # Obtener codigo_interno del producto
+                cursor.execute('''
+                    SELECT codigo_interno, nombre, descripcion 
+                    FROM ca_productos_varios 
+                    WHERE id_producto = ?
+                ''', (item['id_producto'],))
+                
+                producto_info = cursor.fetchone()
+                if not producto_info:
+                    raise Exception(f"Producto con ID {item['id_producto']} no encontrado")
+                
+                # Insertar detalle de venta
+                cursor.execute('''
+                    INSERT INTO detalles_venta (
+                        id_venta,
+                        codigo_interno,
+                        tipo_producto,
+                        cantidad,
+                        precio_unitario,
+                        subtotal_linea,
+                        nombre_producto,
+                        descripcion_producto
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    venta_id,
+                    producto_info['codigo_interno'],
+                    'varios',
+                    item['cantidad'],
+                    item['precio'],
+                    item['subtotal'],
+                    producto_info['nombre'],
+                    producto_info['descripcion']
+                ))
+                
+                # Actualizar stock en inventario
+                cursor.execute('''
+                    UPDATE inventario 
+                    SET stock_actual = stock_actual - ?,
+                        fecha_ultima_salida = CURRENT_TIMESTAMP
+                    WHERE codigo_interno = ?
+                ''', (item['cantidad'], producto_info['codigo_interno']))
+            
+            # Confirmar transacción
+            cursor.execute('COMMIT')
+            
+            logging.info(f"Venta creada exitosamente: ID {venta_id}")
+            return venta_id
+            
+        except Exception as e:
+            # Rollback en caso de error
+            cursor.execute('ROLLBACK')
+            logging.error(f"Error creando venta: {e}")
+            raise e
+    
+    def get_sales_by_date(self, fecha):
+        """Obtener ventas por fecha específica"""
+        try:
+            cursor = self.connection.cursor()
+            
+            cursor.execute('''
+                SELECT 
+                    v.id_venta,
+                    v.fecha as fecha_venta,
+                    v.total,
+                    u.nombre_completo as usuario
+                FROM ventas v
+                LEFT JOIN usuarios u ON v.id_usuario = u.id_usuario
+                WHERE DATE(v.fecha) = ?
+                ORDER BY v.fecha DESC
+            ''', (fecha.strftime('%Y-%m-%d'),))
+            
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
+            
+        except Exception as e:
+            logging.error(f"Error obteniendo ventas por fecha: {e}")
+            return []
+    
+    def get_sales_by_date_range(self, fecha_desde, fecha_hasta):
+        """Obtener ventas por rango de fechas"""
+        try:
+            cursor = self.connection.cursor()
+            
+            cursor.execute('''
+                SELECT 
+                    v.id_venta,
+                    v.fecha as fecha_venta,
+                    v.total,
+                    u.nombre_completo as usuario
+                FROM ventas v
+                LEFT JOIN usuarios u ON v.id_usuario = u.id_usuario
+                WHERE DATE(v.fecha) BETWEEN ? AND ?
+                ORDER BY v.fecha DESC
+            ''', (fecha_desde.strftime('%Y-%m-%d'), fecha_hasta.strftime('%Y-%m-%d')))
+            
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
+            
+        except Exception as e:
+            logging.error(f"Error obteniendo ventas por rango: {e}")
+            return []
+    
+    def get_sale_details(self, venta_id):
+        """Obtener detalles de una venta específica"""
+        try:
+            cursor = self.connection.cursor()
+            
+            cursor.execute('''
+                SELECT 
+                    dv.id_detalle,
+                    dv.cantidad,
+                    dv.precio_unitario,
+                    dv.subtotal_linea as subtotal,
+                    dv.nombre_producto as producto,
+                    dv.descripcion_producto,
+                    dv.codigo_interno
+                FROM detalles_venta dv
+                WHERE dv.id_venta = ?
+                ORDER BY dv.nombre_producto
+            ''', (venta_id,))
+            
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
+            
+        except Exception as e:
+            logging.error(f"Error obteniendo detalles de venta: {e}")
+            return []
+    
+    def get_sale_by_id(self, venta_id):
+        """Obtener información de una venta por ID"""
+        try:
+            cursor = self.connection.cursor()
+            
+            cursor.execute('''
+                SELECT 
+                    v.id_venta,
+                    v.fecha as fecha_venta,
+                    v.total,
+                    u.nombre_completo as usuario,
+                    v.id_usuario
+                FROM ventas v
+                LEFT JOIN usuarios u ON v.id_usuario = u.id_usuario
+                WHERE v.id_venta = ?
+            ''', (venta_id,))
+            
+            result = cursor.fetchone()
+            return dict(result) if result else None
+            
+        except Exception as e:
+            logging.error(f"Error obteniendo venta por ID: {e}")
+            return None
+    
+    def get_sale_items(self, venta_id):
+        """Obtener items/productos de una venta (alias de get_sale_details)"""
+        try:
+            items = self.get_sale_details(venta_id)
+            # Renombrar campo 'producto' a 'nombre' para consistencia
+            for item in items:
+                item['nombre'] = item.get('producto', '')
+            return items
+        except Exception as e:
+            logging.error(f"Error obteniendo items de venta: {e}")
+            return []
