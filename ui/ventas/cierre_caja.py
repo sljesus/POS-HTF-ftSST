@@ -103,6 +103,9 @@ class CierreCajaWindow(QWidget):
         self.efectivo_input = QLineEdit()
         self.efectivo_input.setPlaceholderText("0.00")
         
+        # Limitar a 8 caracteres máximo (99999.99)
+        self.efectivo_input.setMaxLength(8)
+        
         # Validador para limitar a 99,999.99 máximo con 2 decimales
         validator = QDoubleValidator(0.0, 99999.99, 2)
         validator.setNotation(QDoubleValidator.StandardNotation)

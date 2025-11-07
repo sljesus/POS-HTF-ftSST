@@ -1,0 +1,588 @@
+"""
+Ventana de Historial de Acceso al Gimnasio para HTF POS
+Usando componentes reutilizables del sistema de diseño
+"""
+
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, 
+    QPushButton, QTableWidget, QTableWidgetItem,
+    QHeaderView, QLineEdit, QSizePolicy, QFrame,
+    QComboBox, QDateEdit, QLabel
+)
+from PySide6.QtCore import Qt, Signal, QDate
+from PySide6.QtGui import QFont
+from datetime import datetime
+import logging
+
+# Importar componentes del sistema de diseño
+from ui.components import (
+    WindowsPhoneTheme,
+    TileButton,
+    create_page_layout,
+    ContentPanel,
+    StyledLabel,
+    SearchBar,
+    show_info_dialog,
+    show_warning_dialog,
+    show_error_dialog
+)
+
+
+class HistorialAccesoWindow(QWidget):
+    """Widget para ver el historial completo de accesos al gimnasio"""
+    
+    cerrar_solicitado = Signal()
+    
+    def __init__(self, db_manager, supabase_service, user_data, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.supabase_service = supabase_service
+        self.user_data = user_data
+        self.accesos_data = []
+        
+        self.setup_ui()
+        self.cargar_accesos()
+    
+    def setup_ui(self):
+        """Configurar interfaz del historial"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Contenido
+        content = QWidget()
+        content_layout = create_page_layout("HISTORIAL DE ACCESO")
+        content.setLayout(content_layout)
+        
+        # Panel de filtros
+        filters_panel = ContentPanel()
+        filters_layout = QVBoxLayout(filters_panel)
+        
+        # Primera fila de filtros
+        filters_row1 = QHBoxLayout()
+        filters_row1.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
+        
+        # Buscador
+        self.search_bar = SearchBar("Buscar por nombre, código o área...")
+        filters_row1.addWidget(self.search_bar, stretch=3)
+        
+        # Filtro por tipo de acceso
+        tipo_container = QWidget()
+        tipo_layout = QVBoxLayout(tipo_container)
+        tipo_layout.setContentsMargins(0, 0, 0, 0)
+        tipo_layout.setSpacing(4)
+        
+        tipo_label = StyledLabel("Tipo:", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        tipo_layout.addWidget(tipo_label)
+        
+        self.tipo_combo = QComboBox()
+        self.tipo_combo.addItems([
+            "Todos",
+            "Miembro",
+            "Personal",
+            "Visitante"
+        ])
+        self.tipo_combo.setMinimumHeight(40)
+        self.tipo_combo.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.tipo_combo.currentTextChanged.connect(self.aplicar_filtros)
+        tipo_layout.addWidget(self.tipo_combo)
+        
+        filters_row1.addWidget(tipo_container, stretch=1)
+        
+        # Filtro por estado (dentro/fuera)
+        estado_container = QWidget()
+        estado_layout = QVBoxLayout(estado_container)
+        estado_layout.setContentsMargins(0, 0, 0, 0)
+        estado_layout.setSpacing(4)
+        
+        estado_label = StyledLabel("Estado:", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        estado_layout.addWidget(estado_label)
+        
+        self.estado_combo = QComboBox()
+        self.estado_combo.addItems([
+            "Todos",
+            "Dentro",
+            "Salió"
+        ])
+        self.estado_combo.setMinimumHeight(40)
+        self.estado_combo.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.estado_combo.currentTextChanged.connect(self.aplicar_filtros)
+        estado_layout.addWidget(self.estado_combo)
+        
+        filters_row1.addWidget(estado_container, stretch=1)
+        filters_layout.addLayout(filters_row1)
+        
+        # Segunda fila - Rango de fechas
+        filters_row2 = QHBoxLayout()
+        filters_row2.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
+        
+        # Fecha inicio
+        fecha_inicio_container = QWidget()
+        fecha_inicio_layout = QVBoxLayout(fecha_inicio_container)
+        fecha_inicio_layout.setContentsMargins(0, 0, 0, 0)
+        fecha_inicio_layout.setSpacing(4)
+        
+        fecha_inicio_label = StyledLabel("Desde:", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        fecha_inicio_layout.addWidget(fecha_inicio_label)
+        
+        self.fecha_inicio = QDateEdit()
+        self.fecha_inicio.setDate(QDate.currentDate().addDays(-7))  # Últimos 7 días
+        self.fecha_inicio.setCalendarPopup(True)
+        self.fecha_inicio.setDisplayFormat("dd/MM/yyyy")
+        self.fecha_inicio.setMinimumHeight(40)
+        self.fecha_inicio.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.fecha_inicio.dateChanged.connect(self.aplicar_filtros)
+        fecha_inicio_layout.addWidget(self.fecha_inicio)
+        
+        filters_row2.addWidget(fecha_inicio_container, stretch=1)
+        
+        # Fecha fin
+        fecha_fin_container = QWidget()
+        fecha_fin_layout = QVBoxLayout(fecha_fin_container)
+        fecha_fin_layout.setContentsMargins(0, 0, 0, 0)
+        fecha_fin_layout.setSpacing(4)
+        
+        fecha_fin_label = StyledLabel("Hasta:", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        fecha_fin_layout.addWidget(fecha_fin_label)
+        
+        self.fecha_fin = QDateEdit()
+        self.fecha_fin.setDate(QDate.currentDate())
+        self.fecha_fin.setCalendarPopup(True)
+        self.fecha_fin.setDisplayFormat("dd/MM/yyyy")
+        self.fecha_fin.setMinimumHeight(40)
+        self.fecha_fin.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.fecha_fin.dateChanged.connect(self.aplicar_filtros)
+        fecha_fin_layout.addWidget(self.fecha_fin)
+        
+        filters_row2.addWidget(fecha_fin_container, stretch=1)
+        
+        # Botón limpiar filtros
+        btn_limpiar = QPushButton("Limpiar Filtros")
+        btn_limpiar.setMinimumHeight(40)
+        btn_limpiar.setMinimumWidth(120)
+        btn_limpiar.setObjectName("tileButton")
+        btn_limpiar.setProperty("tileColor", WindowsPhoneTheme.TILE_ORANGE)
+        btn_limpiar.clicked.connect(self.limpiar_filtros)
+        filters_row2.addWidget(btn_limpiar, alignment=Qt.AlignBottom)
+        
+        filters_layout.addLayout(filters_row2)
+        content_layout.addWidget(filters_panel)
+        
+        # Conectar búsqueda
+        self.search_bar.connect_search(self.aplicar_filtros)
+        
+        # Panel para la tabla
+        table_panel = ContentPanel()
+        table_layout = QVBoxLayout(table_panel)
+        table_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Tabla de accesos
+        self.accesos_table = QTableWidget()
+        self.accesos_table.setColumnCount(9)
+        self.accesos_table.setHorizontalHeaderLabels([
+            "Fecha Entrada", "Fecha Salida", "Tipo", "Nombre", 
+            "Código", "Área", "Tiempo", "Dispositivo", "Notas"
+        ])
+        
+        # Configurar header
+        header = self.accesos_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(8, QHeaderView.Stretch)
+        
+        # Estilo de la tabla
+        self.accesos_table.setAlternatingRowColors(True)
+        self.accesos_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.accesos_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.accesos_table.verticalHeader().setVisible(False)
+        
+        table_layout.addWidget(self.accesos_table)
+        content_layout.addWidget(table_panel)
+        
+        # Panel de información y botones
+        info_buttons_panel = ContentPanel()
+        info_buttons_layout = QHBoxLayout(info_buttons_panel)
+        
+        # Etiqueta de información
+        self.info_label = StyledLabel("", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        info_buttons_layout.addWidget(self.info_label, stretch=1)
+        
+        # Botones de acción
+        btn_exportar = TileButton("Exportar Excel", "fa5s.file-excel", WindowsPhoneTheme.TILE_GREEN)
+        btn_exportar.clicked.connect(self.exportar_excel)
+        btn_exportar.setMaximumWidth(200)
+        info_buttons_layout.addWidget(btn_exportar)
+        
+        btn_actualizar = TileButton("Actualizar", "fa5s.sync", WindowsPhoneTheme.TILE_BLUE)
+        btn_actualizar.clicked.connect(self.cargar_accesos)
+        btn_actualizar.setMaximumWidth(200)
+        info_buttons_layout.addWidget(btn_actualizar)
+        
+        btn_volver = TileButton("Volver", "fa5s.arrow-left", WindowsPhoneTheme.TILE_RED)
+        btn_volver.clicked.connect(self.cerrar_solicitado.emit)
+        btn_volver.setMaximumWidth(200)
+        info_buttons_layout.addWidget(btn_volver)
+        
+        content_layout.addWidget(info_buttons_panel)
+        layout.addWidget(content)
+    
+    def cargar_accesos(self):
+        """Cargar todos los accesos desde la base de datos"""
+        try:
+            cursor = self.db_manager.connection.cursor()
+            
+            # Query para obtener accesos con información de miembros y personal
+            query = """
+                SELECT 
+                    re.id_entrada,
+                    re.fecha_entrada,
+                    re.fecha_salida,
+                    re.tipo_acceso,
+                    re.area_accedida,
+                    re.dispositivo_registro,
+                    re.notas,
+                    CASE 
+                        WHEN re.tipo_acceso = 'miembro' THEN m.nombres || ' ' || m.apellidos
+                        WHEN re.tipo_acceso = 'personal' THEN p.nombre_personal
+                        WHEN re.tipo_acceso = 'visitante' THEN re.nombre_visitante
+                        ELSE 'Desconocido'
+                    END as nombre_completo,
+                    CASE 
+                        WHEN re.tipo_acceso = 'miembro' THEN m.codigo_miembro
+                        WHEN re.tipo_acceso = 'personal' THEN CAST(p.id_personal AS VARCHAR)
+                        ELSE 'N/A'
+                    END as codigo
+                FROM registro_entradas re
+                LEFT JOIN miembros m ON re.id_miembro = m.id_miembro
+                LEFT JOIN personal p ON re.id_personal = p.id_personal
+                ORDER BY re.fecha_entrada DESC
+            """
+            
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            self.accesos_data = []
+            for row in rows:
+                self.accesos_data.append({
+                    'id_entrada': row[0],
+                    'fecha_entrada': row[1],
+                    'fecha_salida': row[2],
+                    'tipo_acceso': row[3],
+                    'area_accedida': row[4] or 'General',
+                    'dispositivo_registro': row[5] or 'Manual',
+                    'notas': row[6] or '',
+                    'nombre_completo': row[7],
+                    'codigo': row[8]
+                })
+            
+            self.aplicar_filtros()
+            logging.info(f"Accesos cargados: {len(self.accesos_data)}")
+            
+        except Exception as e:
+            logging.error(f"Error cargando accesos: {e}")
+            show_error_dialog(
+                self,
+                "Error al cargar",
+                "No se pudieron cargar los registros de acceso",
+                detail=str(e)
+            )
+    
+    def aplicar_filtros(self):
+        """Aplicar todos los filtros activos"""
+        try:
+            # Obtener criterios de filtro
+            texto_busqueda = self.search_bar.text().strip().lower()
+            tipo_seleccionado = self.tipo_combo.currentText()
+            estado_seleccionado = self.estado_combo.currentText()
+            fecha_desde = self.fecha_inicio.date().toPython()
+            fecha_hasta = self.fecha_fin.date().toPython()
+            
+            # Filtrar datos
+            accesos_filtrados = []
+            for acceso in self.accesos_data:
+                # Filtro de texto
+                if texto_busqueda:
+                    if not any([
+                        texto_busqueda in acceso['nombre_completo'].lower(),
+                        texto_busqueda in acceso['codigo'].lower(),
+                        texto_busqueda in acceso['area_accedida'].lower(),
+                        texto_busqueda in (acceso['notas'] or '').lower()
+                    ]):
+                        continue
+                
+                # Filtro de tipo
+                if tipo_seleccionado != "Todos":
+                    if acceso['tipo_acceso'].lower() != tipo_seleccionado.lower():
+                        continue
+                
+                # Filtro de estado (dentro/salió)
+                if estado_seleccionado != "Todos":
+                    if estado_seleccionado == "Dentro" and acceso['fecha_salida'] is not None:
+                        continue
+                    if estado_seleccionado == "Salió" and acceso['fecha_salida'] is None:
+                        continue
+                
+                # Filtro de fecha
+                fecha_acc = acceso['fecha_entrada'].date() if isinstance(acceso['fecha_entrada'], datetime) else acceso['fecha_entrada']
+                if not (fecha_desde <= fecha_acc <= fecha_hasta):
+                    continue
+                
+                accesos_filtrados.append(acceso)
+            
+            self.mostrar_accesos(accesos_filtrados)
+            
+        except Exception as e:
+            logging.error(f"Error aplicando filtros: {e}")
+            self.mostrar_accesos(self.accesos_data)
+    
+    def mostrar_accesos(self, accesos):
+        """Mostrar accesos en la tabla"""
+        try:
+            self.accesos_table.setRowCount(0)
+            
+            for acceso in accesos:
+                row = self.accesos_table.rowCount()
+                self.accesos_table.insertRow(row)
+                
+                # Fecha entrada
+                fecha_entrada_str = acceso['fecha_entrada'].strftime("%d/%m/%Y %H:%M") if isinstance(acceso['fecha_entrada'], datetime) else str(acceso['fecha_entrada'])
+                item_entrada = QTableWidgetItem(fecha_entrada_str)
+                item_entrada.setTextAlignment(Qt.AlignCenter)
+                self.accesos_table.setItem(row, 0, item_entrada)
+                
+                # Fecha salida
+                if acceso['fecha_salida']:
+                    fecha_salida_str = acceso['fecha_salida'].strftime("%d/%m/%Y %H:%M") if isinstance(acceso['fecha_salida'], datetime) else str(acceso['fecha_salida'])
+                    item_salida = QTableWidgetItem(fecha_salida_str)
+                    item_salida.setTextAlignment(Qt.AlignCenter)
+                else:
+                    item_salida = QTableWidgetItem("DENTRO")
+                    item_salida.setTextAlignment(Qt.AlignCenter)
+                    item_salida.setForeground(Qt.darkGreen)
+                    item_salida.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
+                
+                self.accesos_table.setItem(row, 1, item_salida)
+                
+                # Tipo de acceso
+                tipo = acceso['tipo_acceso'].capitalize()
+                item_tipo = QTableWidgetItem(tipo)
+                item_tipo.setTextAlignment(Qt.AlignCenter)
+                
+                # Color según tipo
+                if acceso['tipo_acceso'].lower() == 'miembro':
+                    item_tipo.setForeground(Qt.darkBlue)
+                elif acceso['tipo_acceso'].lower() == 'personal':
+                    item_tipo.setForeground(Qt.darkGreen)
+                else:
+                    item_tipo.setForeground(Qt.darkRed)
+                
+                self.accesos_table.setItem(row, 2, item_tipo)
+                
+                # Nombre completo
+                self.accesos_table.setItem(row, 3, QTableWidgetItem(acceso['nombre_completo']))
+                
+                # Código
+                item_codigo = QTableWidgetItem(acceso['codigo'])
+                item_codigo.setTextAlignment(Qt.AlignCenter)
+                self.accesos_table.setItem(row, 4, item_codigo)
+                
+                # Área
+                item_area = QTableWidgetItem(acceso['area_accedida'])
+                item_area.setTextAlignment(Qt.AlignCenter)
+                self.accesos_table.setItem(row, 5, item_area)
+                
+                # Tiempo de permanencia
+                if acceso['fecha_salida']:
+                    try:
+                        delta = acceso['fecha_salida'] - acceso['fecha_entrada']
+                        horas = delta.seconds // 3600
+                        minutos = (delta.seconds % 3600) // 60
+                        tiempo_str = f"{horas}h {minutos}m"
+                    except:
+                        tiempo_str = "-"
+                else:
+                    # Calcular tiempo desde entrada hasta ahora
+                    try:
+                        ahora = datetime.now()
+                        delta = ahora - acceso['fecha_entrada']
+                        horas = delta.seconds // 3600
+                        minutos = (delta.seconds % 3600) // 60
+                        tiempo_str = f"{horas}h {minutos}m"
+                    except:
+                        tiempo_str = "-"
+                
+                item_tiempo = QTableWidgetItem(tiempo_str)
+                item_tiempo.setTextAlignment(Qt.AlignCenter)
+                self.accesos_table.setItem(row, 6, item_tiempo)
+                
+                # Dispositivo
+                item_dispositivo = QTableWidgetItem(acceso['dispositivo_registro'])
+                item_dispositivo.setTextAlignment(Qt.AlignCenter)
+                self.accesos_table.setItem(row, 7, item_dispositivo)
+                
+                # Notas
+                self.accesos_table.setItem(row, 8, QTableWidgetItem(acceso['notas']))
+            
+            # Actualizar información
+            total_accesos = len(accesos)
+            total_general = len(self.accesos_data)
+            dentro_ahora = sum(1 for a in accesos if a['fecha_salida'] is None)
+            
+            if total_accesos == total_general:
+                self.info_label.setText(f"Total de accesos: {total_accesos} | Dentro ahora: {dentro_ahora}")
+            else:
+                self.info_label.setText(f"Mostrando {total_accesos} de {total_general} accesos | Dentro ahora: {dentro_ahora}")
+            
+            logging.info(f"Mostrando {total_accesos} accesos en tabla")
+            
+        except Exception as e:
+            logging.error(f"Error mostrando accesos: {e}")
+            show_error_dialog(
+                self,
+                "Error de visualización",
+                "No se pudieron mostrar los accesos",
+                detail=str(e)
+            )
+    
+    def limpiar_filtros(self):
+        """Limpiar todos los filtros y mostrar todo"""
+        self.search_bar.clear()
+        self.tipo_combo.setCurrentIndex(0)
+        self.estado_combo.setCurrentIndex(0)
+        self.fecha_inicio.setDate(QDate.currentDate().addDays(-7))
+        self.fecha_fin.setDate(QDate.currentDate())
+        self.aplicar_filtros()
+    
+    def exportar_excel(self):
+        """Exportar accesos filtrados a Excel"""
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill, Alignment
+            from datetime import datetime
+            
+            # Crear workbook
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Historial Acceso"
+            
+            # Encabezados
+            headers = [
+                "Fecha Entrada", "Fecha Salida", "Tipo", "Nombre", 
+                "Código", "Área", "Tiempo", "Dispositivo", "Notas"
+            ]
+            
+            # Estilo de encabezado
+            header_fill = PatternFill(start_color="0066CC", end_color="0066CC", fill_type="solid")
+            header_font = Font(bold=True, color="FFFFFF", size=11)
+            
+            for col, header in enumerate(headers, start=1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            
+            # Obtener accesos filtrados actuales
+            texto_busqueda = self.search_bar.text().strip().lower()
+            tipo_seleccionado = self.tipo_combo.currentText()
+            estado_seleccionado = self.estado_combo.currentText()
+            fecha_desde = self.fecha_inicio.date().toPython()
+            fecha_hasta = self.fecha_fin.date().toPython()
+            
+            accesos_exportar = []
+            for acceso in self.accesos_data:
+                if texto_busqueda:
+                    if not any([
+                        texto_busqueda in acceso['nombre_completo'].lower(),
+                        texto_busqueda in acceso['codigo'].lower(),
+                        texto_busqueda in acceso['area_accedida'].lower(),
+                        texto_busqueda in (acceso['notas'] or '').lower()
+                    ]):
+                        continue
+                
+                if tipo_seleccionado != "Todos":
+                    if acceso['tipo_acceso'].lower() != tipo_seleccionado.lower():
+                        continue
+                
+                if estado_seleccionado != "Todos":
+                    if estado_seleccionado == "Dentro" and acceso['fecha_salida'] is not None:
+                        continue
+                    if estado_seleccionado == "Salió" and acceso['fecha_salida'] is None:
+                        continue
+                
+                fecha_acc = acceso['fecha_entrada'].date() if isinstance(acceso['fecha_entrada'], datetime) else acceso['fecha_entrada']
+                if not (fecha_desde <= fecha_acc <= fecha_hasta):
+                    continue
+                
+                accesos_exportar.append(acceso)
+            
+            # Datos
+            for row_idx, acceso in enumerate(accesos_exportar, start=2):
+                fecha_entrada_str = acceso['fecha_entrada'].strftime("%d/%m/%Y %H:%M") if isinstance(acceso['fecha_entrada'], datetime) else str(acceso['fecha_entrada'])
+                fecha_salida_str = acceso['fecha_salida'].strftime("%d/%m/%Y %H:%M") if acceso['fecha_salida'] and isinstance(acceso['fecha_salida'], datetime) else ("DENTRO" if not acceso['fecha_salida'] else str(acceso['fecha_salida']))
+                
+                # Calcular tiempo
+                if acceso['fecha_salida']:
+                    try:
+                        delta = acceso['fecha_salida'] - acceso['fecha_entrada']
+                        horas = delta.seconds // 3600
+                        minutos = (delta.seconds % 3600) // 60
+                        tiempo_str = f"{horas}h {minutos}m"
+                    except:
+                        tiempo_str = "-"
+                else:
+                    tiempo_str = "-"
+                
+                ws.cell(row=row_idx, column=1, value=fecha_entrada_str)
+                ws.cell(row=row_idx, column=2, value=fecha_salida_str)
+                ws.cell(row=row_idx, column=3, value=acceso['tipo_acceso'].capitalize())
+                ws.cell(row=row_idx, column=4, value=acceso['nombre_completo'])
+                ws.cell(row=row_idx, column=5, value=acceso['codigo'])
+                ws.cell(row=row_idx, column=6, value=acceso['area_accedida'])
+                ws.cell(row=row_idx, column=7, value=tiempo_str)
+                ws.cell(row=row_idx, column=8, value=acceso['dispositivo_registro'])
+                ws.cell(row=row_idx, column=9, value=acceso['notas'])
+            
+            # Ajustar anchos
+            ws.column_dimensions['A'].width = 18
+            ws.column_dimensions['B'].width = 18
+            ws.column_dimensions['C'].width = 12
+            ws.column_dimensions['D'].width = 35
+            ws.column_dimensions['E'].width = 15
+            ws.column_dimensions['F'].width = 12
+            ws.column_dimensions['G'].width = 12
+            ws.column_dimensions['H'].width = 15
+            ws.column_dimensions['I'].width = 30
+            
+            # Guardar archivo
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"historial_acceso_{timestamp}.xlsx"
+            wb.save(filename)
+            
+            show_info_dialog(
+                self,
+                "Exportación exitosa",
+                f"Archivo generado: {filename}\n\nAccesos exportados: {len(accesos_exportar)}"
+            )
+            
+            logging.info(f"Reporte de accesos exportado: {filename}")
+            
+        except ImportError:
+            show_error_dialog(
+                self,
+                "Módulo no disponible",
+                "No se puede exportar a Excel. El módulo openpyxl no está instalado."
+            )
+        except Exception as e:
+            logging.error(f"Error exportando a Excel: {e}")
+            show_error_dialog(
+                self,
+                "Error de exportación",
+                "No se pudo generar el archivo Excel",
+                detail=str(e)
+            )

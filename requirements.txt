@@ -5,3 +5,4 @@ python-dotenv>=1.0.0
 supabase>=2.0.0  # Cliente para sincronización con Supabase
 psycopg2-binary>=2.9.0  # Driver PostgreSQL
 pyinstaller>=6.0.0  # Para generar ejecutable de Windows
+customtkinter>=5.2.2  # UI alternativa para formularios simples

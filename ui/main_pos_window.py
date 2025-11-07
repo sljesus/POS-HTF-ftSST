@@ -13,6 +13,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QSize, QTimer
 from PySide6.QtGui import QFont, QIcon, QPalette, QColor
 import logging
+import subprocess
+import sys
+import os
 
 # Importar componentes del sistema de diseño
 from ui.components import (
@@ -37,6 +40,12 @@ from ui.ventas import (
 
 # Importar ventana de personal
 from ui.personal_window import PersonalWindow
+from ui.inventario_window import InventarioWindow
+from ui.movimiento_inventario_window import MovimientoInventarioWindow
+from ui.historial_movimientos_window import HistorialMovimientosWindow
+from ui.historial_acceso_window import HistorialAccesoWindow
+from ui.buscar_miembro_window import BuscarMiembroWindow
+from ui.nuevo_producto_window import NuevoProductoWindow
 
 
 class MainPOSWindow(QMainWindow):
@@ -178,23 +187,25 @@ class MainPOSWindow(QMainWindow):
     def create_inventory_page(self):
         """Página de inventario usando TileButton"""
         page = QWidget()
-        layout = create_page_layout("MOVIMIENTOS DE INVENTARIO")
+        layout = create_page_layout("INVENTARIO")
         page.setLayout(layout)
         
         # Grid de tiles
         grid = create_tile_grid_layout()
         
         actions = [
-            {"text": "Registrar Entrada", "icon": "fa5s.plus-circle", "color": WindowsPhoneTheme.TILE_GREEN},
-            {"text": "Registrar Salida", "icon": "fa5s.minus-circle", "color": WindowsPhoneTheme.TILE_RED},
-            {"text": "Ver Inventario", "icon": "fa5s.warehouse", "color": WindowsPhoneTheme.TILE_BLUE},
-            {"text": "Buscar Producto", "icon": "fa5s.search", "color": WindowsPhoneTheme.TILE_ORANGE},
-            {"text": "Bajo Stock", "icon": "fa5s.exclamation-triangle", "color": WindowsPhoneTheme.TILE_MAGENTA},
-            {"text": "Reporte", "icon": "fa5s.chart-line", "color": WindowsPhoneTheme.TILE_PURPLE},
+            {"text": "Nuevo Producto", "icon": "fa5s.plus-square", "color": WindowsPhoneTheme.TILE_GREEN, "callback": self.abrir_nuevo_producto},
+            {"text": "Ver Inventario", "icon": "fa5s.warehouse", "color": WindowsPhoneTheme.TILE_BLUE, "callback": self.abrir_inventario},
+            {"text": "Registrar Entrada", "icon": "fa5s.plus-circle", "color": WindowsPhoneTheme.TILE_GREEN, "callback": self.abrir_registro_entrada},
+            {"text": "Registrar Salida", "icon": "fa5s.minus-circle", "color": WindowsPhoneTheme.TILE_RED, "callback": self.abrir_registro_salida},
+            {"text": "Movimientos", "icon": "fa5s.exchange-alt", "color": WindowsPhoneTheme.TILE_PURPLE, "callback": self.abrir_historial_movimientos},
         ]
         
+        # Agregar los botones al grid
         for i, action in enumerate(actions):
             btn = TileButton(action["text"], action["icon"], action["color"])
+            if action["callback"]:
+                btn.clicked.connect(action["callback"])
             row = i // 3
             col = i % 3
             grid.addWidget(btn, row, col)
@@ -244,11 +255,13 @@ class MainPOSWindow(QMainWindow):
         actions_grid = create_tile_grid_layout()
         
         btn_search = TileButton("Buscar Miembro", "fa5s.search", WindowsPhoneTheme.TILE_ORANGE)
-        btn_register = TileButton("Registrar Entrada", "fa5s.sign-in-alt", WindowsPhoneTheme.TILE_GREEN)
+        btn_search.clicked.connect(self.abrir_buscar_miembro)
+        btn_historial = TileButton("Historial de Acceso", "fa5s.history", WindowsPhoneTheme.TILE_PURPLE)
+        btn_historial.clicked.connect(self.abrir_historial_acceso)
         btn_lockers = TileButton("Gestionar Lockers", "fa5s.key", WindowsPhoneTheme.TILE_BLUE)
         
         actions_grid.addWidget(btn_search, 0, 0)
-        actions_grid.addWidget(btn_register, 0, 1)
+        actions_grid.addWidget(btn_historial, 0, 1)
         actions_grid.addWidget(btn_lockers, 0, 2)
         
         layout.addLayout(actions_grid)
@@ -515,4 +528,271 @@ class MainPOSWindow(QMainWindow):
         QTimer.singleShot(0, self.update_layout)
         
         logging.info("Volviendo a página de configuración")
+    
+    # ========== MÉTODOS DE INVENTARIO ==========
+    
+    def abrir_nuevo_producto(self):
+        """Abrir el formulario de nuevo producto."""
+        try:
+            self.top_bar.set_title("NUEVO PRODUCTO")
+            self.nav_bar.hide()
+
+            nuevo_producto_widget = NuevoProductoWindow(self.db_manager, self)
+            nuevo_producto_widget.cerrar_solicitado.connect(self.volver_a_inventario)
+            nuevo_producto_widget.producto_guardado.connect(self.on_producto_guardado)
+
+            self.stacked_widget.addWidget(nuevo_producto_widget)
+            self.stacked_widget.setCurrentWidget(nuevo_producto_widget)
+
+            QTimer.singleShot(0, self.update_layout)
+            logging.info("Abriendo formulario de nuevo producto.")
+        except Exception as e:
+            logging.error(f"Error abriendo formulario de nuevo producto: {e}")
+    
+    def abrir_inventario(self):
+        """Abrir widget de inventario"""
+        try:
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Crear ventana de inventario
+            inventario_window = InventarioWindow(
+                self.db_manager,
+                self.supabase_service,
+                self.user_data,
+                self
+            )
+            
+            # Conectar señal de cerrar
+            inventario_window.cerrar_solicitado.connect(self.volver_a_inventario)
+            
+            # Agregar al stack y mostrar
+            self.stacked_widget.addWidget(inventario_window)
+            self.stacked_widget.setCurrentWidget(inventario_window)
+            
+            # Actualizar título
+            self.top_bar.set_title("INVENTARIO")
+            
+            # Forzar actualización del layout
+            QTimer.singleShot(0, self.update_layout)
+            
+            logging.info("Abriendo grid de inventario")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo inventario: {e}")
+    
+    def abrir_registro_entrada(self):
+        """Abrir formulario de registro de entrada"""
+        try:
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Crear ventana de registro de entrada
+            entrada_window = MovimientoInventarioWindow(
+                "entrada",
+                self.db_manager,
+                self.supabase_service,
+                self.user_data,
+                self
+            )
+            
+            # Conectar señales
+            entrada_window.cerrar_solicitado.connect(self.volver_a_inventario)
+            entrada_window.movimiento_registrado.connect(self.on_movimiento_registrado)
+            
+            # Agregar al stack y mostrar
+            self.stacked_widget.addWidget(entrada_window)
+            self.stacked_widget.setCurrentWidget(entrada_window)
+            
+            # Actualizar título
+            self.top_bar.set_title("REGISTRAR ENTRADA")
+            
+            # Forzar actualización del layout
+            QTimer.singleShot(0, self.update_layout)
+            
+            logging.info("Abriendo formulario de registro de entrada")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo registro de entrada: {e}")
+    
+    def abrir_registro_salida(self):
+        """Abrir formulario de registro de salida"""
+        try:
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Crear ventana de registro de salida
+            salida_window = MovimientoInventarioWindow(
+                "salida",
+                self.db_manager,
+                self.supabase_service,
+                self.user_data,
+                self
+            )
+            
+            # Conectar señales
+            salida_window.cerrar_solicitado.connect(self.volver_a_inventario)
+            salida_window.movimiento_registrado.connect(self.on_movimiento_registrado)
+            
+            # Agregar al stack y mostrar
+            self.stacked_widget.addWidget(salida_window)
+            self.stacked_widget.setCurrentWidget(salida_window)
+            
+            # Actualizar título
+            self.top_bar.set_title("REGISTRAR SALIDA")
+            
+            # Forzar actualización del layout
+            QTimer.singleShot(0, self.update_layout)
+            
+            logging.info("Abriendo formulario de registro de salida")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo registro de salida: {e}")
+    
+    def volver_a_inventario(self):
+        """Volver a la página de inventario"""
+        # Restaurar título
+        self.top_bar.set_title("HTF POS")
+        
+        # Mostrar barra de navegación
+        self.nav_bar.show()
+        
+        # Obtener el widget actual
+        current_widget = self.stacked_widget.currentWidget()
+        
+        # Cambiar a la página de inventario (índice 1)
+        self.stacked_widget.setCurrentIndex(1)
+        self.switch_tab(1)
+        
+        # Remover el widget temporal
+        QTimer.singleShot(100, lambda: self.remover_widget_temporal(current_widget))
+        
+        # Forzar actualización del layout
+        QTimer.singleShot(0, self.update_layout)
+        
+        logging.info("Volviendo a página de inventario")
+    
+    def on_producto_guardado(self):
+        """Manejar cuando se guarda un producto"""
+        logging.info(f"Producto guardado")
+        self.volver_a_inventario()
+        # Aquí se pueden agregar actualizaciones adicionales
+    
+    def on_movimiento_registrado(self, movimiento_info):
+        """Manejar cuando se registra un movimiento de inventario"""
+        logging.info(
+            f"Movimiento registrado: {movimiento_info['tipo']} - "
+            f"{movimiento_info['producto']} - Cantidad: {movimiento_info['cantidad']}"
+        )
+    
+    def abrir_historial_movimientos(self):
+        """Abrir ventana de historial de movimientos"""
+        try:
+            # Crear ventana de historial
+            historial_window = HistorialMovimientosWindow(
+                self.db_manager,
+                self.supabase_service,
+                self.user_data,
+                parent=self
+            )
+            
+            # Conectar señal de cerrar
+            historial_window.cerrar_solicitado.connect(self.volver_a_inventario)
+            
+            # Agregar al stacked widget
+            index = self.stacked_widget.addWidget(historial_window)
+            self.stacked_widget.setCurrentIndex(index)
+            
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Actualizar título
+            self.top_bar.set_title("Historial de Movimientos")
+            
+            logging.info("Ventana de historial de movimientos abierta")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo historial de movimientos: {e}")
+    
+    def abrir_historial_acceso(self):
+        """Abrir ventana de historial de acceso"""
+        try:
+            # Crear ventana de historial de acceso
+            historial_window = HistorialAccesoWindow(
+                self.db_manager,
+                self.supabase_service,
+                self.user_data,
+                parent=self
+            )
+            
+            # Conectar señal de cerrar
+            historial_window.cerrar_solicitado.connect(self.volver_a_miembros)
+            
+            # Agregar al stacked widget
+            index = self.stacked_widget.addWidget(historial_window)
+            self.stacked_widget.setCurrentIndex(index)
+            
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Actualizar título
+            self.top_bar.set_title("Historial de Acceso")
+            
+            logging.info("Ventana de historial de acceso abierta")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo historial de acceso: {e}")
+    
+    def abrir_buscar_miembro(self):
+        """Abrir ventana de búsqueda de miembros"""
+        try:
+            # Crear ventana de búsqueda
+            buscar_window = BuscarMiembroWindow(
+                self.db_manager,
+                self.supabase_service,
+                self.user_data,
+                parent=self
+            )
+            
+            # Conectar señal de cerrar
+            buscar_window.cerrar_solicitado.connect(self.volver_a_miembros)
+            
+            # Agregar al stacked widget
+            index = self.stacked_widget.addWidget(buscar_window)
+            self.stacked_widget.setCurrentIndex(index)
+            
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Actualizar título
+            self.top_bar.set_title("Buscar Miembro")
+            
+            logging.info("Ventana de búsqueda de miembros abierta")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo búsqueda de miembros: {e}")
+    
+    def volver_a_miembros(self):
+        """Volver a la página de miembros"""
+        # Restaurar título
+        self.top_bar.set_title("HTF POS")
+        
+        # Mostrar barra de navegación
+        self.nav_bar.show()
+        
+        # Obtener el widget actual
+        current_widget = self.stacked_widget.currentWidget()
+        
+        # Cambiar a la página de miembros (índice 2)
+        self.stacked_widget.setCurrentIndex(2)
+        self.switch_tab(2)
+        
+        # Remover el widget temporal
+        QTimer.singleShot(100, lambda: self.remover_widget_temporal(current_widget))
+        
+        # Forzar actualización del layout
+        QTimer.singleShot(0, self.update_layout)
+        
+        logging.info("Volviendo a página de miembros")
+
 

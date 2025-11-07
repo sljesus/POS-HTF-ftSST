@@ -904,3 +904,126 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Error obteniendo items de venta: {e}")
             return []
+    
+    # ========== MÉTODOS PARA PRODUCTOS ==========
+    
+    def check_codigo_interno_exists(self, codigo_interno):
+        """Verificar si un código interno ya existe en productos o suplementos."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT 1 FROM ca_productos_varios WHERE codigo_interno = ?", (codigo_interno,))
+            if cursor.fetchone():
+                return True
+            cursor.execute("SELECT 1 FROM ca_suplementos WHERE codigo_interno = ?", (codigo_interno,))
+            if cursor.fetchone():
+                return True
+            return False
+        except Exception as e:
+            logging.error(f"Error verificando código interno: {e}")
+            return False
+
+    def insertar_producto_varios(self, producto_data):
+        """Insertar un nuevo producto en ca_productos_varios"""
+        try:
+            cursor = self.connection.cursor()
+            
+            cursor.execute('''
+                INSERT INTO ca_productos_varios (
+                    codigo_interno, codigo_barras, nombre, descripcion,
+                    precio_venta, categoria, requiere_refrigeracion, 
+                    peso_gr, activo, needs_sync
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ''', (
+                producto_data['codigo_interno'],
+                producto_data.get('codigo_barras'),
+                producto_data['nombre'],
+                producto_data.get('descripcion'),
+                producto_data['precio_venta'],
+                producto_data.get('categoria', 'General'),
+                producto_data.get('requiere_refrigeracion', False),
+                producto_data.get('peso_gr'),
+                producto_data.get('activo', True)
+            ))
+            
+            self.connection.commit()
+            logging.info(f"Producto varios insertado: {producto_data['codigo_interno']}")
+            return cursor.lastrowid
+            
+        except sqlite3.IntegrityError as e:
+            logging.error(f"Error de integridad insertando producto varios: {e}")
+            raise Exception(f"El código interno '{producto_data['codigo_interno']}' ya existe")
+        except Exception as e:
+            logging.error(f"Error insertando producto varios: {e}")
+            raise
+    
+    def insertar_suplemento(self, suplemento_data):
+        """Insertar un nuevo suplemento en ca_suplementos"""
+        try:
+            cursor = self.connection.cursor()
+            
+            cursor.execute('''
+                INSERT INTO ca_suplementos (
+                    codigo_interno, nombre, descripcion, marca, tipo,
+                    sabor, presentacion, peso_neto_gr, porciones_totales,
+                    calorias_por_porcion, proteina_por_porcion_gr,
+                    precio_venta, fecha_vencimiento, activo, needs_sync
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ''', (
+                suplemento_data['codigo_interno'],
+                suplemento_data['nombre'],
+                suplemento_data.get('descripcion'),
+                suplemento_data['marca'],
+                suplemento_data['tipo'],
+                suplemento_data.get('sabor'),
+                suplemento_data.get('presentacion'),
+                suplemento_data.get('peso_neto_gr'),
+                suplemento_data.get('porciones_totales'),
+                suplemento_data.get('calorias_por_porcion'),
+                suplemento_data.get('proteina_por_porcion_gr'),
+                suplemento_data['precio_venta'],
+                suplemento_data.get('fecha_vencimiento'),
+                suplemento_data.get('activo', True)
+            ))
+            
+            self.connection.commit()
+            logging.info(f"Suplemento insertado: {suplemento_data['codigo_interno']}")
+            return cursor.lastrowid
+            
+        except sqlite3.IntegrityError as e:
+            logging.error(f"Error de integridad insertando suplemento: {e}")
+            raise Exception(f"El código interno '{suplemento_data['codigo_interno']}' ya existe")
+        except Exception as e:
+            logging.error(f"Error insertando suplemento: {e}")
+            raise
+    
+    def crear_inventario(self, inventario_data):
+        """Crear un registro de inventario para un producto"""
+        try:
+            cursor = self.connection.cursor()
+            
+            cursor.execute('''
+                INSERT INTO inventario (
+                    codigo_interno, tipo_producto, stock_actual, stock_minimo,
+                    stock_maximo, ubicacion, seccion, activo, needs_sync
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ''', (
+                inventario_data['codigo_interno'],
+                inventario_data['tipo_producto'],
+                inventario_data.get('stock_actual', 0),
+                inventario_data.get('stock_minimo', 5),
+                inventario_data.get('stock_maximo'),
+                inventario_data.get('ubicacion', 'Recepción'),
+                inventario_data.get('seccion'),
+                inventario_data.get('activo', True)
+            ))
+            
+            self.connection.commit()
+            logging.info(f"Inventario creado para: {inventario_data['codigo_interno']}")
+            return cursor.lastrowid
+            
+        except sqlite3.IntegrityError as e:
+            logging.error(f"Error de integridad creando inventario: {e}")
+            raise Exception(f"Ya existe inventario para '{inventario_data['codigo_interno']}'")
+        except Exception as e:
+            logging.error(f"Error creando inventario: {e}")
+            raise
