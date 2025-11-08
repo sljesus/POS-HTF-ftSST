@@ -892,3 +892,17 @@ def show_confirmation_dialog(
         confirm_text,
         cancel_text
     )
+
+
+def show_input_dialog(parent, title, message, placeholder=""):
+    """Mostrar diálogo para solicitar entrada de texto"""
+    from PySide6.QtWidgets import QInputDialog
+    
+    text, ok = QInputDialog.getText(
+        parent,
+        title,
+        message,
+        text=placeholder
+    )
+    
+    return text, ok

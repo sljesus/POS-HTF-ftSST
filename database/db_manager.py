@@ -921,6 +921,10 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Error verificando código interno: {e}")
             return False
+    
+    def producto_existe(self, codigo_interno):
+        """Alias para check_codigo_interno_exists para compatibilidad"""
+        return self.check_codigo_interno_exists(codigo_interno)
 
     def insertar_producto_varios(self, producto_data):
         """Insertar un nuevo producto en ca_productos_varios"""
@@ -1027,3 +1031,142 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Error creando inventario: {e}")
             raise
+    
+    # ========== MÉTODOS PARA ACCESO DE MIEMBROS ==========
+    
+    def obtener_miembro_por_codigo_qr(self, codigo_qr):
+        """Obtener datos completos de un miembro por código QR"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    id_miembro,
+                    nombres,
+                    apellido_paterno,
+                    apellido_materno,
+                    telefono,
+                    email,
+                    contacto_emergencia,
+                    telefono_emergencia,
+                    codigo_qr,
+                    activo,
+                    fecha_registro,
+                    fecha_nacimiento
+                FROM miembros
+                WHERE codigo_qr = ?
+            """, (codigo_qr,))
+            
+            row = cursor.fetchone()
+            if row:
+                # Convertir a diccionario
+                columns = [description[0] for description in cursor.description]
+                miembro = dict(zip(columns, row))
+                return miembro
+            else:
+                return None
+                
+        except Exception as e:
+            logging.error(f"Error obteniendo miembro por código QR: {e}")
+            return None
+    
+    def obtener_miembro_por_id(self, id_miembro):
+        """Obtener datos completos de un miembro por ID"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    id_miembro,
+                    nombres,
+                    apellido_paterno,
+                    apellido_materno,
+                    telefono,
+                    email,
+                    contacto_emergencia,
+                    telefono_emergencia,
+                    codigo_qr,
+                    activo,
+                    fecha_registro,
+                    fecha_nacimiento
+                FROM miembros
+                WHERE id_miembro = ?
+            """, (id_miembro,))
+            
+            row = cursor.fetchone()
+            if row:
+                # Convertir a diccionario
+                columns = [description[0] for description in cursor.description]
+                miembro = dict(zip(columns, row))
+                return miembro
+            else:
+                return None
+                
+        except Exception as e:
+            logging.error(f"Error obteniendo miembro por ID: {e}")
+            return None
+    
+    def registrar_entrada_miembro(self, id_miembro, id_usuario=None, area="General", notas=None):
+        """Registrar entrada de un miembro al gimnasio"""
+        try:
+            cursor = self.connection.cursor()
+            
+            cursor.execute("""
+                INSERT INTO registro_entradas (
+                    id_miembro,
+                    tipo_acceso,
+                    fecha_entrada,
+                    area_accedida,
+                    dispositivo_registro,
+                    notas,
+                    needs_sync
+                ) VALUES (?, 'miembro', CURRENT_TIMESTAMP, ?, 'POS_LOCAL', ?, 1)
+            """, (id_miembro, area, notas))
+            
+            self.connection.commit()
+            logging.info(f"Entrada registrada para miembro ID: {id_miembro}")
+            return cursor.lastrowid
+            
+        except Exception as e:
+            logging.error(f"Error registrando entrada de miembro: {e}")
+            return None
+    
+    def obtener_ultimo_acceso_miembro(self, id_miembro):
+        """Obtener información del último acceso de un miembro"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    fecha_entrada,
+                    fecha_salida,
+                    area_accedida
+                FROM registro_entradas
+                WHERE id_miembro = ?
+                ORDER BY fecha_entrada DESC
+                LIMIT 1
+            """, (id_miembro,))
+            
+            row = cursor.fetchone()
+            if row:
+                columns = [description[0] for description in cursor.description]
+                return dict(zip(columns, row))
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error obteniendo último acceso: {e}")
+            return None
+    
+    def contar_accesos_hoy(self, id_miembro):
+        """Contar cuántas veces ha accedido un miembro hoy"""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM registro_entradas
+                WHERE id_miembro = ?
+                AND DATE(fecha_entrada) = DATE('now')
+            """, (id_miembro,))
+            
+            return cursor.fetchone()[0]
+            
+        except Exception as e:
+            logging.error(f"Error contando accesos de hoy: {e}")
+            return 0
