@@ -99,9 +99,10 @@ class NuevaVentaWindow(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.Fixed)
-        header.resizeSection(4, 56)
+        header.resizeSection(4, 50)  # Ancho de columna de acción
 
         self.productos_table.verticalHeader().setVisible(False)
+        self.productos_table.verticalHeader().setDefaultSectionSize(40)  # Altura de fila
         self.productos_table.setSelectionMode(QTableWidget.NoSelection)
         self.productos_table.setFocusPolicy(Qt.NoFocus)
         self.productos_table.setAlternatingRowColors(True)
@@ -238,14 +239,14 @@ class NuevaVentaWindow(QWidget):
         btn = QPushButton()
         btn.setCursor(QCursor(Qt.PointingHandCursor))
         btn.setToolTip("Agregar al carrito")
-        btn.setFixedSize(30, 30)
+        btn.setFixedSize(28, 28)  # Botón más compacto
         btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {WindowsPhoneTheme.TILE_GREEN};
                 color: white;
                 border: none;
-                border-radius: 6px;
-                font-size: 16px;
+                border-radius: 5px;
+                font-size: 14px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
@@ -256,7 +257,7 @@ class NuevaVentaWindow(QWidget):
         try:
             import qtawesome as qta
             btn.setIcon(qta.icon('fa5s.plus', color='white'))
-            btn.setIconSize(QSize(14, 14))
+            btn.setIconSize(QSize(12, 12))  # Icono más pequeño
         except Exception:
             btn.setText("+")
 
