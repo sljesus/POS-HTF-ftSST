@@ -544,7 +544,7 @@ class ConfirmacionVentaDialog(QDialog):
         title = QLabel("CONFIRMAR VENTA")
         title.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 18, QFont.Bold))
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet(f"color: {WindowsPhoneTheme.TEXT_PRIMARY}; padding: 10px;")
+        title.setStyleSheet("color: #000000; padding: 10px;")
         layout.addWidget(title)
         
         # Resumen de productos
@@ -607,7 +607,7 @@ class ConfirmacionVentaDialog(QDialog):
         pago_label = QLabel("Método de Pago: EFECTIVO")
         pago_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 11))
         pago_label.setAlignment(Qt.AlignCenter)
-        pago_label.setStyleSheet(f"color: {WindowsPhoneTheme.TEXT_SECONDARY}; padding: 10px;")
+        pago_label.setStyleSheet("color: #666666; padding: 10px;")
         layout.addWidget(pago_label)
         
         # Botones

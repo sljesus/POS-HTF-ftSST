@@ -942,3 +942,20 @@
 2025-10-31 23:07:02,557 - INFO - Cambio a pestaña: 3
 2025-10-31 23:07:04,339 - INFO - Abriendo gestión de personal
 2025-11-01 00:57:28,382 - INFO - Conexión a base de datos cerrada
+2025-11-08 00:36:10,252 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-11-08 00:36:10,270 - INFO - Inventario inicial sincronizado
+2025-11-08 00:36:10,272 - INFO - Base de datos inicializada correctamente
+2025-11-08 00:36:11,238 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-11-08 00:36:11,238 - INFO - Conexión a Supabase establecida
+2025-11-08 00:36:18,044 - INFO - Login exitoso: admin
+2025-11-08 00:36:18,044 - INFO - Usuario autenticado: admin
+2025-11-08 00:36:19,947 - INFO - Abriendo widget de nueva venta
+2025-11-08 00:36:40,211 - INFO - Cambio a pestaña: 0
+2025-11-08 00:36:40,211 - INFO - Volviendo a página de ventas
+2025-11-08 00:36:41,330 - INFO - Abriendo widget de ventas del día
+2025-11-08 00:36:42,909 - INFO - Cambio a pestaña: 0
+2025-11-08 00:36:42,909 - INFO - Volviendo a página de ventas
+2025-11-08 00:36:44,108 - INFO - Cambio a pestaña: 2
+2025-11-08 00:36:47,343 - ERROR - Error cargando miembros: near "'7 days'": syntax error
+2025-11-08 00:36:49,592 - INFO - Ventana de búsqueda de miembros abierta
+2025-11-08 00:39:33,992 - INFO - Conexión a base de datos cerrada
