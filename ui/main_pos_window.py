@@ -46,7 +46,6 @@ from ui.nuevo_producto_window import NuevoProductoWindow
 from ui.historial_movimientos_window import HistorialMovimientosWindow
 from ui.historial_acceso_window import HistorialAccesoWindow
 from ui.buscar_miembro_window import BuscarMiembroWindow
-from ui.acceso_miembro_dialog import AccesoMiembroDialog
 
 
 class MainPOSWindow(QMainWindow):
@@ -255,18 +254,15 @@ class MainPOSWindow(QMainWindow):
         # Botones de acción
         actions_grid = create_tile_grid_layout()
         
-        btn_registrar_acceso = TileButton("Registrar Acceso", "fa5s.user-check", WindowsPhoneTheme.TILE_GREEN)
-        btn_registrar_acceso.clicked.connect(self.abrir_registrar_acceso)
         btn_search = TileButton("Buscar Miembro", "fa5s.search", WindowsPhoneTheme.TILE_ORANGE)
         btn_search.clicked.connect(self.abrir_buscar_miembro)
         btn_historial = TileButton("Historial de Acceso", "fa5s.history", WindowsPhoneTheme.TILE_PURPLE)
         btn_historial.clicked.connect(self.abrir_historial_acceso)
         btn_lockers = TileButton("Gestionar Lockers", "fa5s.key", WindowsPhoneTheme.TILE_BLUE)
         
-        actions_grid.addWidget(btn_registrar_acceso, 0, 0)
-        actions_grid.addWidget(btn_search, 0, 1)
-        actions_grid.addWidget(btn_historial, 0, 2)
-        actions_grid.addWidget(btn_lockers, 1, 0)
+        actions_grid.addWidget(btn_search, 0, 0)
+        actions_grid.addWidget(btn_historial, 0, 1)
+        actions_grid.addWidget(btn_lockers, 0, 2)
         
         layout.addLayout(actions_grid)
         layout.addStretch()
@@ -751,96 +747,6 @@ class MainPOSWindow(QMainWindow):
             
         except Exception as e:
             logging.error(f"Error abriendo historial de acceso: {e}")
-    
-    def abrir_registrar_acceso(self):
-        """Abrir diálogo para registrar acceso de miembro (simulación con ID de prueba)"""
-        try:
-            from ui.components import show_input_dialog
-            
-            # Solicitar ID del miembro o código QR
-            codigo, ok = show_input_dialog(
-                self,
-                "Registrar Acceso",
-                "Ingrese el ID del miembro o código QR:",
-                "Ejemplo: 1 o MIEMBRO001"
-            )
-            
-            if ok and codigo:
-                codigo = codigo.strip()
-                
-                # Intentar buscar por ID numérico primero
-                miembro = None
-                try:
-                    id_miembro = int(codigo)
-                    miembro = self.db_manager.obtener_miembro_por_id(id_miembro)
-                except ValueError:
-                    # Si no es número, buscar por código QR
-                    miembro = self.db_manager.obtener_miembro_por_codigo_qr(codigo)
-                
-                if miembro:
-                    # Mostrar diálogo de acceso
-                    dialog = AccesoMiembroDialog(miembro, self)
-                    dialog.acceso_confirmado.connect(self.on_acceso_confirmado)
-                    dialog.exec()
-                else:
-                    from ui.components import show_error_dialog
-                    show_error_dialog(
-                        self,
-                        "Miembro no encontrado",
-                        f"No se encontró ningún miembro con el código '{codigo}'.",
-                        "Verifique el ID o código QR e intente nuevamente."
-                    )
-            
-            logging.info("Solicitud de registro de acceso")
-            
-        except Exception as e:
-            logging.error(f"Error abriendo registro de acceso: {e}")
-            from ui.components import show_error_dialog
-            show_error_dialog(
-                self,
-                "Error",
-                "Ocurrió un error al intentar registrar el acceso",
-                detail=str(e)
-            )
-    
-    def on_acceso_confirmado(self, miembro_data):
-        """Manejar cuando se confirma el acceso de un miembro"""
-        try:
-            # Registrar la entrada en la base de datos
-            id_entrada = self.db_manager.registrar_entrada_miembro(
-                id_miembro=miembro_data['id_miembro'],
-                id_usuario=self.user_data.get('id_usuario'),
-                area="General",
-                notas=None
-            )
-            
-            if id_entrada:
-                from ui.components import show_info_dialog
-                nombre_completo = f"{miembro_data['nombres']} {miembro_data['apellido_paterno']}"
-                show_info_dialog(
-                    self,
-                    "Acceso Registrado",
-                    f"¡Bienvenido {nombre_completo}!",
-                    f"Entrada registrada exitosamente.\nID Entrada: {id_entrada}"
-                )
-                logging.info(f"Acceso registrado para miembro ID: {miembro_data['id_miembro']}")
-            else:
-                from ui.components import show_error_dialog
-                show_error_dialog(
-                    self,
-                    "Error al registrar",
-                    "No se pudo registrar la entrada del miembro.",
-                    "Intente nuevamente o contacte al administrador."
-                )
-        except Exception as e:
-            logging.error(f"Error confirmando acceso: {e}")
-            from ui.components import show_error_dialog
-            show_error_dialog(
-                self,
-                "Error",
-                "Ocurrió un error al registrar la entrada",
-                detail=str(e)
-            )
     
     def abrir_buscar_miembro(self):
         """Abrir ventana de búsqueda de miembros"""
