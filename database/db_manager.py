@@ -724,17 +724,34 @@ class DatabaseManager:
             # Iniciar transacción
             cursor.execute('BEGIN TRANSACTION')
             
+            # Calcular subtotal, descuento e impuestos
+            subtotal = venta_data['total']
+            descuento = venta_data.get('descuento', 0)
+            impuestos = venta_data.get('impuestos', 0)
+            
             # Insertar venta
             cursor.execute('''
                 INSERT INTO ventas (
                     fecha,
+                    subtotal,
+                    descuento,
+                    impuestos,
                     total,
-                    id_usuario
-                ) VALUES (?, ?, ?)
+                    id_usuario,
+                    metodo_pago,
+                    tipo_venta,
+                    estado
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 venta_data['fecha_venta'],
+                subtotal,
+                descuento,
+                impuestos,
                 venta_data['total'],
-                venta_data['id_usuario']
+                venta_data['id_usuario'],
+                venta_data.get('metodo_pago', 'efectivo'),
+                venta_data.get('tipo_venta', 'directa'),
+                'completada'
             ))
             
             venta_id = cursor.lastrowid
@@ -752,6 +769,19 @@ class DatabaseManager:
                 if not producto_info:
                     raise Exception(f"Producto con ID {item['id_producto']} no encontrado")
                 
+                codigo_interno = producto_info['codigo_interno']
+                
+                # Verificar stock disponible
+                cursor.execute('''
+                    SELECT stock_actual 
+                    FROM inventario 
+                    WHERE codigo_interno = ?
+                ''', (codigo_interno,))
+                
+                stock_row = cursor.fetchone()
+                if not stock_row or stock_row['stock_actual'] < item['cantidad']:
+                    raise Exception(f"Stock insuficiente para {producto_info['nombre']}")
+                
                 # Insertar detalle de venta
                 cursor.execute('''
                     INSERT INTO detalles_venta (
@@ -766,7 +796,7 @@ class DatabaseManager:
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     venta_id,
-                    producto_info['codigo_interno'],
+                    codigo_interno,
                     'varios',
                     item['cantidad'],
                     item['precio'],
@@ -781,12 +811,14 @@ class DatabaseManager:
                     SET stock_actual = stock_actual - ?,
                         fecha_ultima_salida = CURRENT_TIMESTAMP
                     WHERE codigo_interno = ?
-                ''', (item['cantidad'], producto_info['codigo_interno']))
+                ''', (item['cantidad'], codigo_interno))
+                
+                logging.info(f"Stock actualizado para {codigo_interno}: -{item['cantidad']} unidades")
             
             # Confirmar transacción
             cursor.execute('COMMIT')
             
-            logging.info(f"Venta creada exitosamente: ID {venta_id}")
+            logging.info(f"Venta creada exitosamente: ID {venta_id}, Total: ${venta_data['total']:.2f}")
             return venta_id
             
         except Exception as e:

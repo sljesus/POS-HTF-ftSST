@@ -344,6 +344,7 @@ class NuevaVentaWindow(QWidget):
             # Nuevo producto en el carrito
             self.carrito.append({
                 'id_producto': producto['id_producto'],
+                'codigo_interno': producto.get('codigo_interno', ''),
                 'nombre': producto['nombre'],
                 'precio': producto['precio_venta'],
                 'cantidad': 1,
@@ -462,32 +463,52 @@ class NuevaVentaWindow(QWidget):
             venta_data = {
                 'fecha_venta': datetime.now(),
                 'total': self.total_venta,
-                'id_usuario': self.user_data['id'],
+                'id_usuario': self.user_data.get('id_usuario', self.user_data.get('id', 1)),
+                'metodo_pago': 'efectivo',
+                'tipo_venta': 'directa',
                 'productos': self.carrito
             }
             
             venta_id = self.db_manager.create_sale(venta_data)
             
-            # Generar y mostrar ticket
-            self.mostrar_ticket(venta_id)
-            
-            # Emitir señal de venta completada
-            self.venta_completada.emit({
-                'id_venta': venta_id,
-                'total': self.total_venta,
-                'productos': len(self.carrito)
-            })
-            
-            # Limpiar carrito
-            self.carrito.clear()
-            self.actualizar_carrito()
-            
-            # Recargar productos para actualizar stock
-            self.cargar_productos()
+            if venta_id:
+                # Mostrar mensaje de éxito
+                show_success_dialog(
+                    self, 
+                    "Venta Completada", 
+                    f"La venta se procesó exitosamente.\nID de venta: {venta_id}",
+                    f"Total: ${self.total_venta:.2f}"
+                )
+                
+                # Generar y mostrar ticket
+                self.mostrar_ticket(venta_id)
+                
+                # Emitir señal de venta completada
+                self.venta_completada.emit({
+                    'id_venta': venta_id,
+                    'total': self.total_venta,
+                    'productos': len(self.carrito)
+                })
+                
+                # Limpiar carrito
+                self.carrito.clear()
+                self.actualizar_carrito()
+                
+                # Recargar productos para actualizar stock
+                self.cargar_productos()
+                
+                logging.info(f"Venta {venta_id} procesada exitosamente: ${self.total_venta:.2f}")
+            else:
+                show_error_dialog(self, "Error", "No se pudo procesar la venta.")
             
         except Exception as e:
             logging.error(f"Error procesando venta: {e}")
-            show_error_dialog(self, "Error", f"Error al procesar la venta: {e}")
+            show_error_dialog(
+                self, 
+                "Error al Procesar Venta", 
+                "No se pudo completar la venta.",
+                f"Detalle: {str(e)}"
+            )
             
     def mostrar_ticket(self, venta_id):
         """Mostrar ticket de venta"""
