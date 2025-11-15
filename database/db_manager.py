@@ -127,12 +127,7 @@ class DatabaseManager:
                 descripcion TEXT,
                 marca TEXT NOT NULL,
                 tipo TEXT NOT NULL,
-                sabor TEXT,
-                presentacion TEXT,
                 peso_neto_gr REAL,
-                porciones_totales INTEGER,
-                calorias_por_porcion REAL,
-                proteina_por_porcion_gr REAL,
                 precio_venta REAL NOT NULL CHECK (precio_venta > 0),
                 activo BOOLEAN DEFAULT 1,
                 fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -999,23 +994,17 @@ class DatabaseManager:
             
             cursor.execute('''
                 INSERT INTO ca_suplementos (
-                    codigo_interno, nombre, descripcion, marca, tipo,
-                    sabor, presentacion, peso_neto_gr, porciones_totales,
-                    calorias_por_porcion, proteina_por_porcion_gr,
-                    precio_venta, fecha_vencimiento, activo, needs_sync
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                    codigo_interno, codigo_barras, nombre, descripcion, marca, tipo,
+                    peso_neto_gr, precio_venta, fecha_vencimiento, activo, needs_sync
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             ''', (
                 suplemento_data['codigo_interno'],
+                suplemento_data.get('codigo_barras'),
                 suplemento_data['nombre'],
                 suplemento_data.get('descripcion'),
                 suplemento_data['marca'],
                 suplemento_data['tipo'],
-                suplemento_data.get('sabor'),
-                suplemento_data.get('presentacion'),
                 suplemento_data.get('peso_neto_gr'),
-                suplemento_data.get('porciones_totales'),
-                suplemento_data.get('calorias_por_porcion'),
-                suplemento_data.get('proteina_por_porcion_gr'),
                 suplemento_data['precio_venta'],
                 suplemento_data.get('fecha_vencimiento'),
                 suplemento_data.get('activo', True)

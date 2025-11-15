@@ -82,26 +82,25 @@ def insertar_datos_prueba():
     print("\n💊 Insertando suplementos...")
     
     suplementos = [
-        ("SUP001", "Whey Protein Gold Standard", "Proteína de suero de leche premium", "Optimum Nutrition", "Proteína", "Chocolate", "Bote", 2270, 74, 120, 24, 899.00, "2026-06-15"),
-        ("SUP002", "Creatina Monohidratada", "Creatina pura micronizada", "Dymatize", "Creatina", None, "Bolsa", 300, 60, 0, 5, 320.00, "2026-08-20"),
-        ("SUP003", "Pre Workout C4 Original", "Pre-entreno con cafeína y beta-alanina", "Cellucor", "Pre-entreno", "Ponche de Frutas", "Bote", 390, 60, 5, 0, 550.00, "2026-04-10"),
-        ("SUP004", "BCAA Powder 5000", "Aminoácidos de cadena ramificada 2:1:1", "Optimum Nutrition", "BCAA", "Sandía", "Bote", 345, 60, 0, 5, 480.00, "2026-07-25"),
-        ("SUP005", "Glutamina Powder", "L-Glutamina pura en polvo", "MuscleTech", "Glutamina", None, "Bolsa", 300, 60, 0, 5, 380.00, "2026-05-18"),
-        ("SUP006", "Proteína Vegana", "Proteína de chícharo y arroz", "Garden of Life", "Proteína", "Vainilla", "Bote", 620, 20, 120, 20, 650.00, "2026-09-30"),
-        ("SUP007", "Quemador Hydroxycut", "Termogénico con cafeína", "MuscleTech", "Quemador", None, "Cápsula", 180, 60, 10, 0, 520.00, "2026-03-15"),
-        ("SUP008", "Mass Gainer Serious", "Ganador de peso con carbohidratos", "Optimum Nutrition", "Ganador de Masa", "Chocolate", "Bote", 5450, 50, 1250, 50, 1250.00, "2026-10-20"),
-        ("SUP009", "Multivitamínico Opti-Men", "Complejo vitamínico para hombres", "Optimum Nutrition", "Vitaminas", None, "Cápsula", 240, 90, 10, 0, 420.00, "2027-01-15"),
-        ("SUP010", "ZMA Capsulas", "Zinc, Magnesio y Vitamina B6", "Universal Nutrition", "Vitaminas", None, "Cápsula", 180, 90, 5, 0, 280.00, "2026-11-05")
+        ("SUP001", "7501234560001", "Whey Protein Gold Standard", "Proteína de suero de leche premium", "Optimum Nutrition", "Proteína", 2270, 899.00, "2026-06-15"),
+        ("SUP002", "7501234560002", "Creatina Monohidratada", "Creatina pura micronizada", "Dymatize", "Creatina", 300, 320.00, "2026-08-20"),
+        ("SUP003", "7501234560003", "Pre Workout C4 Original", "Pre-entreno con cafeína y beta-alanina", "Cellucor", "Pre-entreno", 390, 550.00, "2026-04-10"),
+        ("SUP004", "7501234560004", "BCAA Powder 5000", "Aminoácidos de cadena ramificada 2:1:1", "Optimum Nutrition", "BCAA", 345, 480.00, "2026-07-25"),
+        ("SUP005", "7501234560005", "Glutamina Powder", "L-Glutamina pura en polvo", "MuscleTech", "Glutamina", 300, 380.00, "2026-05-18"),
+        ("SUP006", "7501234560006", "Proteína Vegana", "Proteína de chícharo y arroz", "Garden of Life", "Proteína", 620, 650.00, "2026-09-30"),
+        ("SUP007", "7501234560007", "Quemador Hydroxycut", "Termogénico con cafeína", "MuscleTech", "Quemador", 180, 520.00, "2026-03-15"),
+        ("SUP008", "7501234560008", "Mass Gainer Serious", "Ganador de peso con carbohidratos", "Optimum Nutrition", "Ganador de Masa", 5450, 1250.00, "2026-10-20"),
+        ("SUP009", "7501234560009", "Multivitamínico Opti-Men", "Complejo vitamínico para hombres", "Optimum Nutrition", "Vitaminas", 240, 420.00, "2027-01-15"),
+        ("SUP010", "7501234560010", "ZMA Capsulas", "Zinc, Magnesio y Vitamina B6", "Universal Nutrition", "Vitaminas", 180, 280.00, "2026-11-05")
     ]
     
     for sup in suplementos:
         try:
             cursor.execute("""
                 INSERT OR IGNORE INTO ca_suplementos (
-                    codigo_interno, nombre, descripcion, marca, tipo, sabor, presentacion,
-                    peso_neto_gr, porciones_totales, calorias_por_porcion,
-                    proteina_por_porcion_gr, precio_venta, fecha_vencimiento
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    codigo_interno, codigo_barras, nombre, descripcion, marca, tipo,
+                    peso_neto_gr, precio_venta, fecha_vencimiento
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, sup)
         except Exception as e:
             print(f"  ⚠️  Error insertando suplemento {sup[1]}: {e}")

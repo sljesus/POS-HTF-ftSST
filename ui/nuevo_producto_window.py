@@ -205,18 +205,6 @@ class NuevoProductoWindow(QWidget):
         self.tipo_suplemento_combo.setMinimumHeight(45)
         suplementos_form.addRow("Tipo de Suplemento *:", self.tipo_suplemento_combo)
         
-        # Sabor
-        self.sabor_input = QLineEdit()
-        self.sabor_input.setPlaceholderText("Ej: Chocolate, Vainilla, Fresa")
-        self.sabor_input.setMinimumHeight(40)
-        suplementos_form.addRow("Sabor:", self.sabor_input)
-        
-        # Presentación
-        self.presentacion_input = QLineEdit()
-        self.presentacion_input.setPlaceholderText("Ej: Bote, Bolsa, Cápsula")
-        self.presentacion_input.setMinimumHeight(40)
-        suplementos_form.addRow("Presentación:", self.presentacion_input)
-        
         # Peso Neto
         self.peso_neto_input = QDoubleSpinBox()
         self.peso_neto_input.setSuffix(" gr")
@@ -224,28 +212,6 @@ class NuevoProductoWindow(QWidget):
         self.peso_neto_input.setMaximum(999999.99)
         self.peso_neto_input.setMinimumHeight(40)
         suplementos_form.addRow("Peso Neto:", self.peso_neto_input)
-        
-        # Porciones Totales
-        self.porciones_input = QSpinBox()
-        self.porciones_input.setMaximum(9999)
-        self.porciones_input.setMinimumHeight(40)
-        suplementos_form.addRow("Porciones Totales:", self.porciones_input)
-        
-        # Calorías por Porción
-        self.calorias_input = QDoubleSpinBox()
-        self.calorias_input.setSuffix(" kcal")
-        self.calorias_input.setDecimals(2)
-        self.calorias_input.setMaximum(9999.99)
-        self.calorias_input.setMinimumHeight(40)
-        suplementos_form.addRow("Calorías/Porción:", self.calorias_input)
-        
-        # Proteína por Porción
-        self.proteina_input = QDoubleSpinBox()
-        self.proteina_input.setSuffix(" gr")
-        self.proteina_input.setDecimals(2)
-        self.proteina_input.setMaximum(9999.99)
-        self.proteina_input.setMinimumHeight(40)
-        suplementos_form.addRow("Proteína/Porción:", self.proteina_input)
         
         # Fecha de Vencimiento
         self.fecha_vencimiento_input = QDateEdit()
@@ -313,12 +279,7 @@ class NuevoProductoWindow(QWidget):
         # Campos de suplementos
         self.marca_input.clear()
         self.tipo_suplemento_combo.setCurrentIndex(0)
-        self.sabor_input.clear()
-        self.presentacion_input.clear()
         self.peso_neto_input.setValue(0.0)
-        self.porciones_input.setValue(0)
-        self.calorias_input.setValue(0.0)
-        self.proteina_input.setValue(0.0)
         self.fecha_vencimiento_input.setDate(QDate.currentDate().addYears(1))
         
         # Enfocar primer campo
@@ -416,14 +377,13 @@ class NuevoProductoWindow(QWidget):
                     'codigo_interno': codigo_interno,
                     'nombre': nombre,
                     'descripcion': descripcion,
+                    'codigo_interno': codigo_interno,
+                    'codigo_barras': self.codigo_barras_input.text().strip() or None,
+                    'nombre': nombre,
+                    'descripcion': self.descripcion_input.toPlainText().strip() or None,
                     'marca': self.marca_input.text().strip(),
                     'tipo': self.tipo_suplemento_combo.currentText(),
-                    'sabor': self.sabor_input.text().strip() or None,
-                    'presentacion': self.presentacion_input.text().strip() or None,
                     'peso_neto_gr': self.peso_neto_input.value() if self.peso_neto_input.value() > 0 else None,
-                    'porciones_totales': self.porciones_input.value() if self.porciones_input.value() > 0 else None,
-                    'calorias_por_porcion': self.calorias_input.value() if self.calorias_input.value() > 0 else None,
-                    'proteina_por_porcion_gr': self.proteina_input.value() if self.proteina_input.value() > 0 else None,
                     'precio_venta': precio,
                     'activo': activo,
                     'fecha_vencimiento': self.fecha_vencimiento_input.date().toString("yyyy-MM-dd"),

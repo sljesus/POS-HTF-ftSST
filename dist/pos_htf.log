@@ -25,3 +25,18 @@
 2025-11-08 00:26:15,993 - INFO - Abriendo widget de nueva venta
 2025-11-08 00:26:27,242 - INFO - Cambio a pestaña: 0
 2025-11-08 00:26:27,242 - INFO - Volviendo a página de ventas
+2025-11-08 01:12:30,139 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-11-08 01:12:30,139 - INFO - Inventario inicial sincronizado
+2025-11-08 01:12:30,139 - INFO - Base de datos inicializada correctamente
+2025-11-08 01:12:31,313 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-11-08 01:12:31,313 - INFO - Conexión a Supabase establecida
+2025-11-08 01:12:37,580 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-11-08 01:12:37,580 - INFO - Inventario inicial sincronizado
+2025-11-08 01:12:37,580 - INFO - Base de datos inicializada correctamente
+2025-11-08 01:12:39,180 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-11-08 01:12:39,180 - INFO - Conexión a Supabase establecida
+2025-11-08 01:12:39,929 - INFO - Login exitoso: admin
+2025-11-08 01:12:39,929 - INFO - Usuario autenticado: admin
+2025-11-08 01:12:43,895 - INFO - Abriendo widget de nueva venta
+2025-11-08 01:12:47,198 - INFO - Cambio a pestaña: 0
+2025-11-08 01:12:47,198 - INFO - Volviendo a página de ventas
