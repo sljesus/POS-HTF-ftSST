@@ -233,52 +233,68 @@ class HistorialAccesoWindow(QWidget):
         layout.addWidget(content)
     
     def cargar_accesos(self):
-        """Cargar todos los accesos desde la base de datos"""
+        """Cargar todos los accesos desde Supabase"""
         try:
-            cursor = self.db_manager.connection.cursor()
-            
-            # Query para obtener accesos con información de miembros y personal
-            query = """
-                SELECT 
-                    re.id_entrada,
-                    re.fecha_entrada,
-                    re.fecha_salida,
-                    re.tipo_acceso,
-                    re.area_accedida,
-                    re.dispositivo_registro,
-                    re.notas,
-                    CASE 
-                        WHEN re.tipo_acceso = 'miembro' THEN m.nombres || ' ' || m.apellidos
-                        WHEN re.tipo_acceso = 'personal' THEN p.nombre_personal
-                        WHEN re.tipo_acceso = 'visitante' THEN re.nombre_visitante
-                        ELSE 'Desconocido'
-                    END as nombre_completo,
-                    CASE 
-                        WHEN re.tipo_acceso = 'miembro' THEN m.codigo_miembro
-                        WHEN re.tipo_acceso = 'personal' THEN CAST(p.id_personal AS VARCHAR)
-                        ELSE 'N/A'
-                    END as codigo
-                FROM registro_entradas re
-                LEFT JOIN miembros m ON re.id_miembro = m.id_miembro
-                LEFT JOIN personal p ON re.id_personal = p.id_personal
-                ORDER BY re.fecha_entrada DESC
-            """
-            
-            cursor.execute(query)
-            rows = cursor.fetchall()
+            if self.supabase_service and self.supabase_service.is_connected:
+                # Consultar registro_entradas desde Supabase con relaciones
+                response = self.supabase_service.client.table('registro_entradas')\
+                    .select('''
+                        *,
+                        miembros(
+                            nombres,
+                            apellido_paterno,
+                            apellido_materno,
+                            codigo_qr
+                        ),
+                        personal(
+                            nombres,
+                            apellido_paterno,
+                            apellido_materno,
+                            id_personal,
+                            numero_empleado
+                        )
+                    ''')\
+                    .order('fecha_entrada', desc=True)\
+                    .execute()
+                
+                rows = response.data if response.data else []
+            else:
+                logging.warning("No hay conexión a Supabase")
+                rows = []
             
             self.accesos_data = []
             for row in rows:
+                # Determinar nombre completo según tipo de acceso
+                tipo_acceso = row.get('tipo_acceso', '')
+                nombre_completo = 'Desconocido'
+                codigo = 'N/A'
+                
+                if tipo_acceso == 'miembro' and row.get('miembros'):
+                    miembro = row['miembros']
+                    nombre_completo = f"{miembro.get('nombres', '')} {miembro.get('apellido_paterno', '')} {miembro.get('apellido_materno', '')}".strip()
+                    codigo = miembro.get('codigo_qr', 'N/A')
+                elif tipo_acceso == 'personal' and row.get('personal'):
+                    personal = row['personal']
+                    nombre_completo = f"{personal.get('nombres', '')} {personal.get('apellido_paterno', '')} {personal.get('apellido_materno', '')}".strip()
+                    codigo = personal.get('numero_empleado') or str(personal.get('id_personal', 'N/A'))
+                elif tipo_acceso == 'visitante':
+                    nombre_completo = row.get('nombre_visitante', 'Visitante')
+                    codigo = 'N/A'
+                
+                # Formatear fechas
+                fecha_entrada = row.get('fecha_entrada')
+                fecha_salida = row.get('fecha_salida')
+                
                 self.accesos_data.append({
-                    'id_entrada': row[0],
-                    'fecha_entrada': row[1],
-                    'fecha_salida': row[2],
-                    'tipo_acceso': row[3],
-                    'area_accedida': row[4] or 'General',
-                    'dispositivo_registro': row[5] or 'Manual',
-                    'notas': row[6] or '',
-                    'nombre_completo': row[7],
-                    'codigo': row[8]
+                    'id_entrada': row.get('id_entrada'),
+                    'fecha_entrada': fecha_entrada,
+                    'fecha_salida': fecha_salida,
+                    'tipo_acceso': tipo_acceso,
+                    'area_accedida': row.get('area_accedida') or 'General',
+                    'dispositivo_registro': row.get('dispositivo_registro') or 'Manual',
+                    'notas': row.get('notas') or '',
+                    'nombre_completo': nombre_completo,
+                    'codigo': codigo
                 })
             
             self.aplicar_filtros()

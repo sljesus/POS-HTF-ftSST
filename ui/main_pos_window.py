@@ -216,7 +216,7 @@ class MainPOSWindow(QMainWindow):
         self.stacked_widget.addWidget(page)
         
     def create_members_page(self):
-        """Página de miembros usando InfoTile"""
+        """Página de miembros usando InfoTile - Consulta desde Supabase"""
         page = QWidget()
         layout = create_page_layout("MIEMBROS Y LOCKERS")
         page.setLayout(layout)
@@ -225,12 +225,14 @@ class MainPOSWindow(QMainWindow):
         widgets_layout = QHBoxLayout()
         widgets_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
         
-        # Widget de miembros usando InfoTile
+        # Widget de miembros usando InfoTile - CONSULTA DESDE SUPABASE
         members_tile = InfoTile("MIEMBROS", "fa5s.users", WindowsPhoneTheme.TILE_TEAL)
         try:
-            total_members = self.db_manager.get_total_members()
-            active_today = self.db_manager.get_active_members_today()
-        except:
+            # Consultar directamente a Supabase
+            total_members = self.supabase_service.get_total_members()
+            active_today = self.supabase_service.get_active_members_today()
+        except Exception as e:
+            logging.error(f"Error consultando miembros desde Supabase: {e}")
             total_members = 0
             active_today = 0
         
@@ -239,11 +241,19 @@ class MainPOSWindow(QMainWindow):
         members_tile.add_stretch()
         widgets_layout.addWidget(members_tile)
         
-        # Widget de lockers usando InfoTile
+        # Widget de lockers usando InfoTile - CONSULTA DESDE SUPABASE
         lockers_tile = InfoTile("LOCKERS", "fa5s.key", WindowsPhoneTheme.TILE_MAGENTA)
-        total_lockers = 50
-        occupied_lockers = 12
-        available_lockers = total_lockers - occupied_lockers
+        try:
+            lockers_status = self.supabase_service.get_lockers_status()
+            total_lockers = lockers_status['total']
+            occupied_lockers = lockers_status['occupied']
+            available_lockers = lockers_status['available']
+        except Exception as e:
+            logging.error(f"Error consultando lockers desde Supabase: {e}")
+            total_lockers = 0
+            occupied_lockers = 0
+            available_lockers = 0
+        
         lockers_tile.add_main_value(available_lockers)
         lockers_tile.add_secondary_value(f"Ocupados: {occupied_lockers}/{total_lockers}")
         lockers_tile.add_stretch()

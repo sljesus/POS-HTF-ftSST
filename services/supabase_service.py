@@ -230,3 +230,166 @@ class SupabaseService:
             'url_configured': bool(self.url),
             'key_configured': bool(self.key)
         }
+    
+    # ========== CONSULTAS EN TIEMPO REAL DESDE SUPABASE ==========
+    
+    def get_total_members(self):
+        """Obtener total de miembros activos desde Supabase"""
+        if not self.is_connected:
+            return 0
+        
+        try:
+            response = self.client.table('miembros').select('id_miembro', count='exact').eq('activo', True).execute()
+            return response.count if response.count is not None else 0
+        except Exception as e:
+            logging.error(f"Error obteniendo total de miembros: {e}")
+            return 0
+    
+    def get_active_members_today(self):
+        """Obtener miembros que han accedido hoy desde Supabase"""
+        if not self.is_connected:
+            return 0
+        
+        try:
+            today = datetime.now().date().isoformat()
+            response = self.client.table('registro_entradas')\
+                .select('id_miembro', count='exact')\
+                .eq('tipo_acceso', 'miembro')\
+                .gte('fecha_entrada', f"{today}T00:00:00")\
+                .lte('fecha_entrada', f"{today}T23:59:59")\
+                .execute()
+            
+            # Contar miembros únicos
+            if response.data:
+                unique_members = set(entry['id_miembro'] for entry in response.data if entry.get('id_miembro'))
+                return len(unique_members)
+            return 0
+        except Exception as e:
+            logging.error(f"Error obteniendo miembros activos hoy: {e}")
+            return 0
+    
+    def search_members(self, search_term):
+        """Buscar miembros en Supabase por nombre, teléfono o email"""
+        if not self.is_connected:
+            return []
+        
+        try:
+            # Buscar por nombre completo
+            response = self.client.table('miembros')\
+                .select('*')\
+                .or_(f"nombres.ilike.%{search_term}%,apellido_paterno.ilike.%{search_term}%,apellido_materno.ilike.%{search_term}%,email.ilike.%{search_term}%,telefono.ilike.%{search_term}%")\
+                .eq('activo', True)\
+                .order('apellido_paterno')\
+                .limit(50)\
+                .execute()
+            
+            return response.data if response.data else []
+        except Exception as e:
+            logging.error(f"Error buscando miembros: {e}")
+            return []
+    
+    def get_member_by_id(self, id_miembro):
+        """Obtener un miembro específico por ID desde Supabase"""
+        if not self.is_connected:
+            return None
+        
+        try:
+            response = self.client.table('miembros')\
+                .select('*')\
+                .eq('id_miembro', id_miembro)\
+                .single()\
+                .execute()
+            
+            return response.data if response.data else None
+        except Exception as e:
+            logging.error(f"Error obteniendo miembro {id_miembro}: {e}")
+            return None
+    
+    def get_member_by_qr(self, codigo_qr):
+        """Obtener miembro por código QR desde Supabase"""
+        if not self.is_connected:
+            return None
+        
+        try:
+            response = self.client.table('miembros')\
+                .select('*')\
+                .eq('codigo_qr', codigo_qr)\
+                .eq('activo', True)\
+                .single()\
+                .execute()
+            
+            return response.data if response.data else None
+        except Exception as e:
+            logging.error(f"Error obteniendo miembro por QR: {e}")
+            return None
+    
+    def get_member_access_history(self, id_miembro, limit=20):
+        """Obtener historial de accesos de un miembro desde Supabase"""
+        if not self.is_connected:
+            return []
+        
+        try:
+            response = self.client.table('registro_entradas')\
+                .select('*')\
+                .eq('id_miembro', id_miembro)\
+                .eq('tipo_acceso', 'miembro')\
+                .order('fecha_entrada', desc=True)\
+                .limit(limit)\
+                .execute()
+            
+            return response.data if response.data else []
+        except Exception as e:
+            logging.error(f"Error obteniendo historial de accesos: {e}")
+            return []
+    
+    def get_all_access_today(self):
+        """Obtener todos los registros de acceso del día desde Supabase"""
+        if not self.is_connected:
+            return []
+        
+        try:
+            today = datetime.now().date().isoformat()
+            response = self.client.table('registro_entradas')\
+                .select('*, miembros(nombres, apellido_paterno, apellido_materno)')\
+                .gte('fecha_entrada', f"{today}T00:00:00")\
+                .lte('fecha_entrada', f"{today}T23:59:59")\
+                .order('fecha_entrada', desc=True)\
+                .execute()
+            
+            return response.data if response.data else []
+        except Exception as e:
+            logging.error(f"Error obteniendo accesos del día: {e}")
+            return []
+    
+    def get_lockers_status(self):
+        """Obtener estado de lockers desde Supabase"""
+        if not self.is_connected:
+            return {'total': 0, 'occupied': 0, 'available': 0}
+        
+        try:
+            # Total de lockers
+            total_response = self.client.table('lockers')\
+                .select('id_locker', count='exact')\
+                .eq('activo', True)\
+                .execute()
+            
+            total = total_response.count if total_response.count is not None else 0
+            
+            # Lockers ocupados (asignaciones activas con locker)
+            occupied_response = self.client.table('asignaciones_activas')\
+                .select('id_locker', count='exact')\
+                .eq('activa', True)\
+                .eq('cancelada', False)\
+                .not_.is_('id_locker', 'null')\
+                .execute()
+            
+            occupied = occupied_response.count if occupied_response.count is not None else 0
+            
+            return {
+                'total': total,
+                'occupied': occupied,
+                'available': total - occupied
+            }
+        except Exception as e:
+            logging.error(f"Error obteniendo estado de lockers: {e}")
+            return {'total': 0, 'occupied': 0, 'available': 0}

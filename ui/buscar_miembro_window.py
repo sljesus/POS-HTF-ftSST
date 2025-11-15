@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QDate
 from PySide6.QtGui import QFont
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import logging
 
 # Importar componentes del sistema de diseño
@@ -261,100 +261,99 @@ class BuscarMiembroWindow(QWidget):
         layout.addWidget(content)
     
     def cargar_miembros(self):
-        """Cargar todos los miembros desde la base de datos"""
+        """Cargar todos los miembros desde Supabase"""
         try:
-            cursor = self.db_manager.connection.cursor()
-            
-            # Query para obtener miembros con información de membresías y lockers
-            query = """
-                SELECT 
-                    m.id_miembro,
-                    m.nombres,
-                    m.apellido_paterno,
-                    m.apellido_materno,
-                    m.nombres || ' ' || m.apellido_paterno || ' ' || m.apellido_materno as nombre_completo,
-                    m.telefono,
-                    m.email,
-                    m.contacto_emergencia,
-                    m.telefono_emergencia,
-                    m.codigo_qr,
-                    m.activo,
-                    m.fecha_registro,
-                    m.fecha_nacimiento,
-                    pd.nombre_servicio as membresia,
-                    aa.fecha_fin as fecha_fin_membresia,
-                    aa.estado as estado_membresia,
-                    l.numero_locker,
-                    CASE 
-                        WHEN aa.fecha_fin IS NULL THEN NULL
-                        WHEN aa.fecha_fin < CURRENT_DATE THEN 'vencida'
-                        WHEN aa.fecha_fin <= CURRENT_DATE + INTERVAL '7 days' THEN 'por_vencer'
-                        ELSE 'vigente'
-                    END as estado_vigencia
-                FROM miembros m
-                LEFT JOIN asignaciones_activas aa ON m.id_miembro = aa.id_miembro 
-                    AND aa.estado = 'activa' 
-                    AND aa.fecha_fin >= CURRENT_DATE
-                LEFT JOIN ca_productos_digitales pd ON aa.id_producto_digital = pd.id_producto_digital
-                LEFT JOIN lockers l ON aa.id_locker = l.id_locker
-                ORDER BY m.nombres, m.apellido_paterno
-            """
-            
-            cursor.execute(query)
-            rows = cursor.fetchall()
+            # Consultar miembros desde Supabase con PostgreSQL
+            if self.supabase_service and self.supabase_service.is_connected:
+                response = self.supabase_service.client.table('miembros')\
+                    .select('''
+                        *,
+                        asignaciones_activas(
+                            fecha_fin,
+                            activa,
+                            cancelada,
+                            ca_productos_digitales(nombre),
+                            lockers(numero)
+                        )
+                    ''')\
+                    .order('nombres')\
+                    .execute()
+                
+                rows = response.data if response.data else []
+            else:
+                logging.warning("No hay conexión a Supabase, usando base de datos local")
+                rows = []
             
             self.miembros_data = []
             for row in rows:
-                fecha_nacimiento = row[12]
-                if fecha_nacimiento:
-                    if isinstance(fecha_nacimiento, date):
-                        fecha_nacimiento_str = fecha_nacimiento.strftime("%d/%m/%Y")
-                    else:
-                        fecha_nacimiento_str = str(fecha_nacimiento)
-                else:
-                    fecha_nacimiento_str = "N/A"
+                # Procesar fecha de nacimiento
+                fecha_nacimiento = row.get('fecha_nacimiento')
+                fecha_nacimiento_str = datetime.strptime(fecha_nacimiento, '%Y-%m-%d').strftime('%d/%m/%Y') if fecha_nacimiento else "N/A"
                 
-                fecha_registro = row[11]
-                if fecha_registro:
-                    if isinstance(fecha_registro, date):
-                        fecha_registro_str = fecha_registro.strftime("%d/%m/%Y")
-                    else:
-                        fecha_registro_str = str(fecha_registro)
-                else:
-                    fecha_registro_str = "N/A"
+                # Procesar fecha de registro
+                fecha_registro = row.get('fecha_registro')
+                fecha_registro_str = datetime.strptime(fecha_registro, '%Y-%m-%d').strftime('%d/%m/%Y') if fecha_registro else "N/A"
                 
-                fecha_fin = row[14]
-                if fecha_fin:
-                    if isinstance(fecha_fin, date):
-                        fecha_fin_str = fecha_fin.strftime("%d/%m/%Y")
-                    else:
-                        fecha_fin_str = str(fecha_fin)
-                else:
-                    fecha_fin_str = "N/A"
+                # Obtener información de asignación activa (si existe)
+                asignaciones = row.get('asignaciones_activas', [])
+                membresia = None
+                fecha_fin = None
+                fecha_fin_str = "N/A"
+                estado_vigencia = None
+                numero_locker = None
+                estado_membresia = None
                 
+                if asignaciones and len(asignaciones) > 0:
+                    # Filtrar solo asignaciones activas y no canceladas
+                    asignaciones_validas = [a for a in asignaciones if a.get('activa') and not a.get('cancelada')]
+                    
+                    if asignaciones_validas:
+                        asig = asignaciones_validas[0]
+                        if asig.get('ca_productos_digitales'):
+                            membresia = asig['ca_productos_digitales'].get('nombre')
+                        if asig.get('fecha_fin'):
+                            fecha_fin = datetime.strptime(asig['fecha_fin'], '%Y-%m-%d').date()
+                            fecha_fin_str = fecha_fin.strftime('%d/%m/%Y')
+                            
+                            # Calcular estado de vigencia
+                            hoy = datetime.now().date()
+                            if fecha_fin < hoy:
+                                estado_vigencia = 'vencida'
+                                estado_membresia = 'Vencida'
+                            elif fecha_fin <= (hoy + timedelta(days=7)):
+                                estado_vigencia = 'por_vencer'
+                                estado_membresia = 'Por vencer'
+                            else:
+                                estado_vigencia = 'vigente'
+                                estado_membresia = 'Vigente'
+                        
+                        if asig.get('lockers'):
+                            numero_locker = asig['lockers'].get('numero')
+                
+                # Construir objeto de miembro
                 self.miembros_data.append({
-                    'id_miembro': row[0],
-                    'nombres': row[1],
-                    'apellidos': f"{row[2]} {row[3]}",
-                    'nombre_completo': row[4],
-                    'telefono': row[5] or 'N/A',
-                    'email': row[6] or 'N/A',
-                    'contacto_emergencia': row[7] or 'N/A',
-                    'telefono_emergencia': row[8] or 'N/A',
-                    'codigo_qr': row[9],
-                    'codigo_miembro': f"M-{row[0]:05d}",
-                    'activo': row[10],
+                    'id_miembro': row.get('id_miembro'),
+                    'nombres': row.get('nombres', ''),
+                    'apellidos': f"{row.get('apellido_paterno', '')} {row.get('apellido_materno', '')}".strip(),
+                    'nombre_completo': f"{row.get('nombres', '')} {row.get('apellido_paterno', '')} {row.get('apellido_materno', '')}".strip(),
+                    'telefono': row.get('telefono') or 'N/A',
+                    'email': row.get('email') or 'N/A',
+                    'contacto_emergencia': row.get('contacto_emergencia') or 'N/A',
+                    'telefono_emergencia': row.get('telefono_emergencia') or 'N/A',
+                    'codigo_qr': row.get('codigo_qr', ''),
+                    'codigo_miembro': f"M-{row.get('id_miembro', 0):05d}",
+                    'activo': row.get('activo', False),
                     'fecha_registro': fecha_registro_str,
                     'fecha_nacimiento': fecha_nacimiento_str,
-                    'membresia': row[13] or 'Sin membresía',
+                    'membresia': membresia or 'Sin membresía',
                     'fecha_fin_membresia': fecha_fin_str,
-                    'estado_membresia': row[15],
-                    'locker': f"Locker {row[16]}" if row[16] else 'Sin locker',
-                    'estado_vigencia': row[17]
+                    'estado_membresia': estado_membresia,
+                    'locker': f"Locker {numero_locker}" if numero_locker else 'Sin locker',
+                    'estado_vigencia': estado_vigencia
                 })
             
             self.aplicar_filtros()
-            logging.info(f"Miembros cargados: {len(self.miembros_data)}")
+            logging.info(f"Miembros cargados desde Supabase: {len(self.miembros_data)}")
             
         except Exception as e:
             logging.error(f"Error cargando miembros: {e}")
