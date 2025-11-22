@@ -23,6 +23,7 @@ from ui.components import (
     TileButton,
     InfoTile,
     SectionTitle,
+    StyledLabel,
     TabButton,
     TopBar,
     apply_windows_phone_stylesheet,
@@ -46,6 +47,9 @@ from ui.nuevo_producto_window import NuevoProductoWindow
 from ui.historial_movimientos_window import HistorialMovimientosWindow
 from ui.historial_acceso_window import HistorialAccesoWindow
 from ui.buscar_miembro_window import BuscarMiembroWindow
+from ui.dias_festivos_window import DiasFestvosWindow
+from ui.notificacion_entrada_widget import NotificacionEntradaWidget
+from utils.monitor_entradas import MonitorEntradas
 
 
 class MainPOSWindow(QMainWindow):
@@ -68,10 +72,17 @@ class MainPOSWindow(QMainWindow):
         # Variables de estado
         self.current_tab = 0
         
+        # Monitor de entradas
+        self.monitor_entradas = None
+        self.notificaciones_activas = []  # Lista de notificaciones abiertas
+        
         # Aplicar estilos Windows Phone
         apply_windows_phone_stylesheet(self)
         
         self.setup_ui()
+        
+        # Iniciar monitor de entradas
+        self.iniciar_monitor_entradas()
         
     def setup_ui(self):
         """Configurar interfaz principal"""
@@ -100,6 +111,7 @@ class MainPOSWindow(QMainWindow):
         self.create_sales_page()
         self.create_inventory_page()
         self.create_members_page()
+        self.create_admin_page()
         self.create_settings_page()
         
         # Barra de navegación inferior con pestañas
@@ -123,7 +135,8 @@ class MainPOSWindow(QMainWindow):
             {"name": "Ventas", "icon": "fa5s.shopping-cart", "color": WindowsPhoneTheme.TILE_RED, "index": 0},
             {"name": "Inventario", "icon": "fa5s.boxes", "color": WindowsPhoneTheme.TILE_GREEN, "index": 1},
             {"name": "Miembros", "icon": "fa5s.users", "color": WindowsPhoneTheme.TILE_ORANGE, "index": 2},
-            {"name": "Configuración", "icon": "fa5s.cog", "color": WindowsPhoneTheme.TILE_PURPLE, "index": 3},
+            {"name": "Admin", "icon": "fa5s.user-shield", "color": WindowsPhoneTheme.TILE_PURPLE, "index": 3},
+            {"name": "Config", "icon": "fa5s.cog", "color": WindowsPhoneTheme.TILE_TEAL, "index": 4},
         ]
         
         # Crear botones usando componente TabButton
@@ -279,6 +292,45 @@ class MainPOSWindow(QMainWindow):
         
         self.stacked_widget.addWidget(page)
         
+    def create_admin_page(self):
+        """Página de administración usando TileButton"""
+        page = QWidget()
+        layout = create_page_layout("ADMINISTRACIÓN")
+        page.setLayout(layout)
+        
+        # Grid de administración
+        admin_grid = create_tile_grid_layout()
+        
+        # Solo mostrar si es administrador
+        if self.user_data['rol'] in ['administrador', 'sistemas']:
+            btn_personal = TileButton("Gestionar Personal", "fa5s.users-cog", WindowsPhoneTheme.TILE_GREEN)
+            btn_personal.clicked.connect(self.abrir_gestion_personal)
+            admin_grid.addWidget(btn_personal, 0, 0)
+            
+            btn_dias_festivos = TileButton("Días Festivos", "fa5s.calendar-alt", WindowsPhoneTheme.TILE_BLUE)
+            btn_dias_festivos.clicked.connect(self.abrir_dias_festivos)
+            admin_grid.addWidget(btn_dias_festivos, 0, 1)
+            
+            # Aquí se pueden agregar más botones de administración en el futuro
+            # Ejemplo:
+            # btn_reportes = TileButton("Reportes", "fa5s.chart-bar", WindowsPhoneTheme.TILE_ORANGE)
+            # admin_grid.addWidget(btn_reportes, 0, 2)
+        else:
+            # Si no es administrador, mostrar mensaje
+            no_access_label = StyledLabel(
+                "Acceso restringido a administradores",
+                bold=True,
+                size=WindowsPhoneTheme.FONT_SIZE_TITLE
+            )
+            no_access_label.setAlignment(Qt.AlignCenter)
+            no_access_label.setStyleSheet(f"color: {WindowsPhoneTheme.TEXT_SECONDARY}; padding: 50px;")
+            layout.addWidget(no_access_label)
+        
+        layout.addLayout(admin_grid)
+        layout.addStretch()
+        
+        self.stacked_widget.addWidget(page)
+    
     def create_settings_page(self):
         """Página de configuración usando TileButton"""
         page = QWidget()
@@ -288,29 +340,17 @@ class MainPOSWindow(QMainWindow):
         # Grid de configuración
         config_grid = create_tile_grid_layout()
         
-        # Solo mostrar gestión de personal si es administrador
-        if self.user_data['rol'] in ['administrador', 'sistemas']:
-            btn_personal = TileButton("Gestionar Personal", "fa5s.users-cog", WindowsPhoneTheme.TILE_GREEN)
-            btn_personal.clicked.connect(self.abrir_gestion_personal)
-            config_grid.addWidget(btn_personal, 0, 0)
-        
         btn_change_password = TileButton("Cambiar Contraseña", "fa5s.lock", WindowsPhoneTheme.TILE_ORANGE)
         btn_sync = TileButton("Sincronizar", "fa5s.sync", WindowsPhoneTheme.TILE_BLUE)
         btn_backup = TileButton("Respaldar Datos", "fa5s.database", WindowsPhoneTheme.TILE_TEAL)
         btn_logout = TileButton("Cerrar Sesión", "fa5s.sign-out-alt", WindowsPhoneTheme.TILE_RED)
         btn_logout.clicked.connect(self.handle_logout)
         
-        # Posicionar botones según el rol
-        if self.user_data['rol'] in ['administrador', 'sistemas']:
-            config_grid.addWidget(btn_change_password, 0, 1)
-            config_grid.addWidget(btn_sync, 1, 0)
-            config_grid.addWidget(btn_backup, 1, 1)
-            config_grid.addWidget(btn_logout, 2, 0)
-        else:
-            config_grid.addWidget(btn_change_password, 0, 0)
-            config_grid.addWidget(btn_sync, 0, 1)
-            config_grid.addWidget(btn_backup, 1, 0)
-            config_grid.addWidget(btn_logout, 1, 1)
+        # Posicionar botones
+        config_grid.addWidget(btn_change_password, 0, 0)
+        config_grid.addWidget(btn_sync, 0, 1)
+        config_grid.addWidget(btn_backup, 1, 0)
+        config_grid.addWidget(btn_logout, 1, 1)
         
         layout.addLayout(config_grid)
         layout.addStretch()
@@ -505,7 +545,7 @@ class MainPOSWindow(QMainWindow):
             )
             
             # Conectar señal de cierre
-            personal_widget.cerrar_solicitado.connect(self.volver_a_configuracion)
+            personal_widget.cerrar_solicitado.connect(self.volver_a_administracion)
             
             # Agregar al stack y mostrar
             self.stacked_widget.addWidget(personal_widget)
@@ -516,8 +556,32 @@ class MainPOSWindow(QMainWindow):
         except Exception as e:
             logging.error(f"Error abriendo gestión de personal: {e}")
     
-    def volver_a_configuracion(self):
-        """Volver a la página de configuración"""
+    def abrir_dias_festivos(self):
+        """Abrir widget de gestión de días festivos"""
+        try:
+            # Actualizar título de la barra superior
+            self.top_bar.set_title("DÍAS FESTIVOS")
+            
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Crear widget de días festivos
+            festivos_widget = DiasFestvosWindow(self.supabase_service)
+            
+            # Conectar señal de cierre
+            festivos_widget.cerrar_solicitado.connect(self.volver_a_administracion)
+            
+            # Agregar al stack y mostrar
+            self.stacked_widget.addWidget(festivos_widget)
+            self.stacked_widget.setCurrentWidget(festivos_widget)
+            
+            logging.info("Abriendo gestión de días festivos")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo gestión de días festivos: {e}")
+    
+    def volver_a_administracion(self):
+        """Volver a la página de administración"""
         # Restaurar título
         self.top_bar.set_title("HTF POS")
         
@@ -527,7 +591,7 @@ class MainPOSWindow(QMainWindow):
         # Obtener el widget actual
         current_widget = self.stacked_widget.currentWidget()
         
-        # Cambiar a la página de configuración (índice 3)
+        # Cambiar a la página de administración (índice 3)
         self.stacked_widget.setCurrentIndex(3)
         self.switch_tab(3)
         
@@ -537,7 +601,7 @@ class MainPOSWindow(QMainWindow):
         # Forzar actualización del layout
         QTimer.singleShot(0, self.update_layout)
         
-        logging.info("Volviendo a página de configuración")
+        logging.info("Volviendo a página de administración")
     
     # ========== MÉTODOS DE INVENTARIO ==========
     
@@ -809,5 +873,111 @@ class MainPOSWindow(QMainWindow):
         QTimer.singleShot(0, self.update_layout)
         
         logging.info("Volviendo a página de miembros")
+    
+    # ========== MONITOR DE ENTRADAS ==========
+    
+    def iniciar_monitor_entradas(self):
+        """Inicializar y arrancar el monitor de entradas"""
+        try:
+            # Crear monitor con PostgreSQL LISTEN/NOTIFY
+            self.monitor_entradas = MonitorEntradas(
+                self.db_manager,
+                supabase_service=self.supabase_service,
+                pg_host='localhost',  # Cambiar a IP de la mini PC del torniquete
+                pg_port=5432,
+                pg_database='HTF_DB',
+                pg_user='postgres',
+                pg_password='postgres',
+                pg_channel='nueva_entrada_canal'
+            )
+            
+            # Conectar señal
+            self.monitor_entradas.nueva_entrada_detectada.connect(self.mostrar_notificacion_entrada)
+            
+            # Iniciar monitoreo
+            self.monitor_entradas.iniciar()
+            
+            logging.info("Monitor de entradas iniciado correctamente")
+            
+        except Exception as e:
+            logging.error(f"Error iniciando monitor de entradas: {e}")
+    
+    def mostrar_notificacion_entrada(self, entrada_data):
+        """Mostrar notificación cuando se detecta una nueva entrada"""
+        try:
+            logging.info(f"Mostrando notificación para miembro: {entrada_data['nombres']} {entrada_data['apellido_paterno']}")
+            
+            # Crear ventana de notificación (sin auto-cierre)
+            notificacion = NotificacionEntradaWidget(
+                miembro_data=entrada_data,
+                parent=self,
+                duracion=0  # 0 = no auto-cerrar, usuario debe cerrar manualmente
+            )
+            
+            # Posicionar en la esquina superior derecha
+            self.posicionar_notificacion(notificacion)
+            
+            # Conectar señal de cierre
+            notificacion.cerrado.connect(lambda: self.remover_notificacion(notificacion))
+            
+            # Agregar a lista de notificaciones activas
+            self.notificaciones_activas.append(notificacion)
+            
+            # Mostrar
+            notificacion.show()
+            
+            logging.info(f"Notificación mostrada para entrada ID: {entrada_data['id_entrada']}")
+            
+        except Exception as e:
+            logging.error(f"Error mostrando notificación de entrada: {e}")
+    
+    def posicionar_notificacion(self, notificacion):
+        """Posicionar notificación en la pantalla"""
+        # Obtener geometría de la ventana principal
+        main_geometry = self.geometry()
+        
+        # Calcular posición (esquina superior derecha con margen)
+        margen = 20
+        x = main_geometry.right() - notificacion.width() - margen
+        y = main_geometry.top() + margen
+        
+        # Ajustar posición si hay otras notificaciones
+        offset_vertical = 0
+        for notif in self.notificaciones_activas:
+            if notif.isVisible():
+                offset_vertical += notif.height() + 10
+        
+        y += offset_vertical
+        
+        # Establecer posición
+        notificacion.move(x, y)
+    
+    def remover_notificacion(self, notificacion):
+        """Remover notificación de la lista activa"""
+        if notificacion in self.notificaciones_activas:
+            self.notificaciones_activas.remove(notificacion)
+            logging.debug(f"Notificación removida. Activas: {len(self.notificaciones_activas)}")
+    
+    def closeEvent(self, event):
+        """Evento al cerrar la ventana principal"""
+        try:
+            # Detener monitor de entradas
+            if self.monitor_entradas:
+                self.monitor_entradas.detener()
+                logging.info("Monitor de entradas detenido")
+            
+            # Cerrar todas las notificaciones activas
+            for notificacion in list(self.notificaciones_activas):
+                try:
+                    notificacion.close()
+                except:
+                    pass
+            
+            self.notificaciones_activas.clear()
+            
+        except Exception as e:
+            logging.error(f"Error en closeEvent: {e}")
+        finally:
+            super().closeEvent(event)
 
 

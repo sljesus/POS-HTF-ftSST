@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QFrame, QWidget
 )
 from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QFont, QPixmap, QPainter, QPainterPath
+from PySide6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor
 import logging
 from datetime import datetime
 import os
@@ -252,7 +252,7 @@ class AccesoMiembroDialog(QDialog):
         painter.setRenderHint(QPainter.Antialiasing)
         
         # Círculo de fondo
-        painter.setBrush(Qt.QColor(WindowsPhoneTheme.TILE_BLUE))
+        painter.setBrush(QColor(WindowsPhoneTheme.TILE_BLUE))
         painter.setPen(Qt.NoPen)
         painter.drawEllipse(0, 0, 200, 200)
         

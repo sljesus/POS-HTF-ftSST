@@ -230,7 +230,7 @@ class HistorialMovimientosWindow(QWidget):
                     m.motivo,
                     m.id_usuario,
                     m.id_venta,
-                    COALESCE(pv.nombre_producto, s.nombre_producto, 'Producto desconocido') as nombre_producto,
+                    COALESCE(pv.nombre, s.nombre, 'Producto desconocido') as nombre_producto,
                     u.nombre_usuario
                 FROM movimientos_inventario m
                 LEFT JOIN ca_productos_varios pv ON m.codigo_interno = pv.codigo_interno 

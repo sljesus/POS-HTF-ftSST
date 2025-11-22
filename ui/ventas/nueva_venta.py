@@ -9,10 +9,10 @@ from PySide6.QtWidgets import (
     QGridLayout, QSpinBox,
     QHeaderView, QSizePolicy, QPushButton,
     QDialog, QLabel, QTextEdit,
-    QFrame
+    QFrame, QLineEdit
 )
-from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QFont, QCursor
+from PySide6.QtCore import Qt, Signal, QSize, QTimer
+from PySide6.QtGui import QFont, QCursor, QDoubleValidator
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 import logging
 from datetime import datetime
@@ -53,6 +53,12 @@ class NuevaVentaWindow(QWidget):
         self.carrito = []
         self.total_venta = 0.0
         
+        # Timer para detectar entrada del escáner
+        self.scanner_timer = QTimer()
+        self.scanner_timer.setSingleShot(True)
+        self.scanner_timer.setInterval(300)  # 300ms después de que deje de escribir
+        self.scanner_timer.timeout.connect(self.procesar_codigo_barras)
+        
         self.setup_ui()
         
     def setup_ui(self):
@@ -86,6 +92,8 @@ class NuevaVentaWindow(QWidget):
 
         self.search_bar = SearchBar("Buscar producto por código o nombre...")
         self.search_bar.connect_search(self.buscar_productos)
+        self.search_bar.search_input.returnPressed.connect(self.procesar_codigo_barras)
+        self.search_bar.search_input.textChanged.connect(self._on_search_text_changed)
         layout.addWidget(self.search_bar)
 
         self.productos_table = QTableWidget()
@@ -160,6 +168,7 @@ class NuevaVentaWindow(QWidget):
         header.resizeSection(4, 56)
 
         self.carrito_table.verticalHeader().setVisible(False)
+        self.carrito_table.verticalHeader().setDefaultSectionSize(40)  # Misma altura que tabla de productos
         self.carrito_table.setSelectionMode(QTableWidget.NoSelection)
         self.carrito_table.setFocusPolicy(Qt.NoFocus)
         self.carrito_table.setAlternatingRowColors(True)
@@ -209,7 +218,7 @@ class NuevaVentaWindow(QWidget):
 
         btn_cancelar = self._create_tile_button(
             "Cancelar", "fa5s.times", WindowsPhoneTheme.TILE_ORANGE,
-            self.cerrar_solicitado.emit
+            self.confirmar_cancelar_venta
         )
         layout.addWidget(btn_cancelar, 1, 1)
 
@@ -265,6 +274,43 @@ class NuevaVentaWindow(QWidget):
         layout.addWidget(btn)
 
         return container
+
+    def _create_remove_button(self, index):
+        """Crear botón de quitar con el mismo diseño que el botón de agregar"""
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setAlignment(Qt.AlignCenter)
+
+        btn = QPushButton()
+        btn.setCursor(QCursor(Qt.PointingHandCursor))
+        btn.setToolTip("Quitar del carrito")
+        btn.setFixedSize(28, 28)  # Mismo tamaño que el botón de agregar
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {WindowsPhoneTheme.TILE_RED};
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {WindowsPhoneTheme.TILE_ORANGE};
+            }}
+        """)
+
+        try:
+            import qtawesome as qta
+            btn.setIcon(qta.icon('fa5s.trash', color='white'))
+            btn.setIconSize(QSize(12, 12))  # Mismo tamaño de icono
+        except Exception:
+            btn.setText("×")
+
+        btn.clicked.connect(lambda _, idx=index: self.quitar_del_carrito(idx))
+        layout.addWidget(btn)
+
+        return container
         
     def cargar_productos(self):
         """Cargar productos disponibles"""
@@ -296,6 +342,66 @@ class NuevaVentaWindow(QWidget):
             logging.error(f"Error cargando productos: {e}")
             show_warning_dialog(self, "Error", f"Error al cargar productos: {e}")
             
+    def _on_search_text_changed(self):
+        """Detectar cuando se ingresa texto (para capturar escáner)"""
+        texto = self.search_bar.search_input.text().strip()
+        
+        # Reiniciar el timer cada vez que cambia el texto
+        self.scanner_timer.stop()
+        
+        # Si el texto tiene longitud suficiente para ser un código
+        if len(texto) >= 6:  # Códigos típicamente tienen 6+ caracteres
+            logging.info(f"[SCANNER VENTA] Código detectado (longitud {len(texto)}), iniciando timer...")
+            # Iniciar timer para procesar después de 300ms de inactividad
+            self.scanner_timer.start()
+    
+    def procesar_codigo_barras(self):
+        """Procesar código de barras del escáner (cuando se presiona Enter)"""
+        codigo = self.search_bar.text().strip()
+        
+        # Limpiar campo inmediatamente para permitir siguiente escaneo
+        self.search_bar.clear()
+        
+        if not codigo:
+            return
+        
+        try:
+            # Buscar producto por código exacto
+            productos = self.db_manager.search_products(codigo)
+            
+            # Filtrar por código de barras exacto
+            producto_encontrado = None
+            for p in productos:
+                # sqlite3.Row se accede como diccionario con []
+                codigo_barras = p['codigo_barras'] if p['codigo_barras'] else None
+                if codigo_barras == codigo:
+                    producto_encontrado = p
+                    break
+            
+            if producto_encontrado:
+                # Verificar que tenga stock
+                if producto_encontrado['stock_actual'] > 0:
+                    self.agregar_al_carrito(producto_encontrado)
+                    logging.info(f"Producto agregado automáticamente: {producto_encontrado['nombre']}")
+                else:
+                    show_warning_dialog(
+                        self,
+                        "Sin stock",
+                        f"El producto {producto_encontrado['nombre']} no tiene stock disponible"
+                    )
+            else:
+                # Si no se encontró por código exacto, hacer búsqueda normal
+                self.search_bar.search_input.setText(codigo)
+                self.buscar_productos()
+                
+        except Exception as e:
+            logging.error(f"Error al procesar código de barras: {e}")
+            show_error_dialog(
+                self,
+                "Error",
+                f"No se pudo procesar el código de barras: {str(e)}"
+            )
+    
     def buscar_productos(self):
         """Buscar productos por texto"""
         texto = self.search_bar.text().strip()
@@ -382,36 +488,9 @@ class NuevaVentaWindow(QWidget):
             subtotal_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.carrito_table.setItem(row, 3, subtotal_item)
             
-            # Botón quitar - SIMPLE, sin contenedor
-            btn_quitar = QPushButton()
-            btn_quitar.setFixedSize(40, 35)
-            btn_quitar.setCursor(QCursor(Qt.PointingHandCursor))
-            btn_quitar.setToolTip("Quitar")
-            
-            # Icono Font Awesome
-            try:
-                import qtawesome as qta
-                btn_quitar.setIcon(qta.icon('fa5s.trash', color='white'))
-                btn_quitar.setIconSize(QSize(16, 16))
-            except:
-                btn_quitar.setText("×")
-            
-            btn_quitar.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {WindowsPhoneTheme.TILE_RED};
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    font-size: 20px;
-                    font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: {WindowsPhoneTheme.TILE_ORANGE};
-                }}
-            """)
-            
-            btn_quitar.clicked.connect(lambda checked, idx=row: self.quitar_del_carrito(idx))
-            self.carrito_table.setCellWidget(row, 4, btn_quitar)
+            # Botón Quitar con el mismo diseño que el botón de agregar
+            btn_container = self._create_remove_button(row)
+            self.carrito_table.setCellWidget(row, 4, btn_container)
             
             self.total_venta += item['subtotal']
             
@@ -431,6 +510,27 @@ class NuevaVentaWindow(QWidget):
             del self.carrito[index]
             self.actualizar_carrito()
             
+    def confirmar_cancelar_venta(self):
+        """Confirmar antes de cancelar la venta"""
+        # Si el carrito está vacío, cerrar directamente
+        if not self.carrito:
+            self.cerrar_solicitado.emit()
+            return
+        
+        # Si hay productos en el carrito, pedir confirmación
+        if show_confirmation_dialog(
+            self,
+            "Cancelar Venta",
+            f"Hay {len(self.carrito)} producto(s) en el carrito. ¿Desea cancelar la venta?",
+            detail="Se perderán todos los productos agregados.",
+            confirm_text="Sí, cancelar venta",
+            cancel_text="No, continuar venta"
+        ):
+            # Limpiar carrito y cerrar
+            self.carrito.clear()
+            self.actualizar_carrito()
+            self.cerrar_solicitado.emit()
+    
     def limpiar_carrito(self):
         """Limpiar todo el carrito"""
         if not self.carrito:
@@ -604,6 +704,83 @@ class ConfirmacionVentaDialog(QDialog):
         total_layout.addWidget(total_value)
         layout.addWidget(total_frame)
         
+        # Sección de efectivo recibido (opcional)
+        efectivo_frame = QFrame()
+        efectivo_frame.setStyleSheet("background-color: #f8f9fa; border-radius: 4px;")
+        efectivo_layout = QVBoxLayout(efectivo_frame)
+        efectivo_layout.setContentsMargins(20, 15, 20, 15)
+        efectivo_layout.setSpacing(12)
+        
+        # Título de la sección
+        efectivo_titulo = QLabel("Cálculo de Cambio (Opcional)")
+        efectivo_titulo.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 12, QFont.Bold))
+        efectivo_titulo.setStyleSheet("color: #333;")
+        efectivo_layout.addWidget(efectivo_titulo)
+        
+        # Grid para input de efectivo
+        input_grid = QGridLayout()
+        input_grid.setSpacing(10)
+        
+        efectivo_label = QLabel("Efectivo recibido:")
+        efectivo_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 11))
+        efectivo_label.setStyleSheet("color: #555;")
+        input_grid.addWidget(efectivo_label, 0, 0, Qt.AlignRight | Qt.AlignVCenter)
+        
+        input_container = QHBoxLayout()
+        input_container.setSpacing(5)
+        
+        dollar_label = QLabel("$")
+        dollar_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 14, QFont.Bold))
+        dollar_label.setStyleSheet("color: #333;")
+        input_container.addWidget(dollar_label)
+        
+        self.efectivo_input = QLineEdit()
+        self.efectivo_input.setPlaceholderText("0.00")
+        self.efectivo_input.setMinimumHeight(45)
+        self.efectivo_input.setMinimumWidth(150)
+        self.efectivo_input.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 14))
+        self.efectivo_input.setStyleSheet("""
+            QLineEdit {
+                border: 2px solid #cccccc;
+                border-radius: 4px;
+                padding: 8px 12px;
+                background-color: white;
+            }
+            QLineEdit:focus {
+                border-color: #0078d7;
+            }
+        """)
+        
+        # Validador para solo números con decimales
+        validator = QDoubleValidator(0.0, 999999.99, 2)
+        validator.setNotation(QDoubleValidator.StandardNotation)
+        self.efectivo_input.setValidator(validator)
+        self.efectivo_input.textChanged.connect(self.calcular_cambio)
+        
+        input_container.addWidget(self.efectivo_input)
+        input_container.addStretch()
+        
+        input_widget = QWidget()
+        input_widget.setLayout(input_container)
+        input_grid.addWidget(input_widget, 0, 1)
+        
+        efectivo_layout.addLayout(input_grid)
+        
+        # Separador
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet("background-color: #ddd; max-height: 1px;")
+        efectivo_layout.addWidget(separator)
+        
+        # Label de cambio
+        self.cambio_label = QLabel("Cambio: $0.00")
+        self.cambio_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 16, QFont.Bold))
+        self.cambio_label.setStyleSheet("color: #333; padding: 5px 0;")
+        self.cambio_label.setAlignment(Qt.AlignRight)
+        efectivo_layout.addWidget(self.cambio_label)
+        
+        layout.addWidget(efectivo_frame)
+        
         # Método de pago
         pago_label = QLabel("Método de Pago: EFECTIVO")
         pago_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 11))
@@ -653,6 +830,31 @@ class ConfirmacionVentaDialog(QDialog):
         buttons_layout.addWidget(btn_confirmar)
         
         layout.addLayout(buttons_layout)
+    
+    def calcular_cambio(self):
+        """Calcular y mostrar el cambio"""
+        try:
+            texto = self.efectivo_input.text()
+            if not texto:
+                self.cambio_label.setText("Cambio: $0.00")
+                self.cambio_label.setStyleSheet("color: #333; padding: 10px 0;")
+                return
+            
+            efectivo = float(texto.replace(',', '.'))
+            cambio = efectivo - self.total
+            
+            if cambio < 0:
+                self.cambio_label.setText(f"Falta: ${abs(cambio):.2f}")
+                self.cambio_label.setStyleSheet("color: red; padding: 10px 0; font-weight: bold;")
+            else:
+                self.cambio_label.setText(f"Cambio: ${cambio:.2f}")
+                if cambio > 0:
+                    self.cambio_label.setStyleSheet("color: green; padding: 10px 0; font-weight: bold;")
+                else:
+                    self.cambio_label.setStyleSheet("color: #333; padding: 10px 0; font-weight: bold;")
+        except (ValueError, AttributeError):
+            self.cambio_label.setText("Cambio: $0.00")
+            self.cambio_label.setStyleSheet("color: #333; padding: 10px 0;")
 
 
 class TicketVentaDialog(QDialog):

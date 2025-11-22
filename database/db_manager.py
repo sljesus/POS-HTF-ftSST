@@ -521,9 +521,11 @@ class DatabaseManager:
             
             # Buscar en productos varios
             cursor.execute('''
-                SELECT 'varios' as tipo, codigo_interno, codigo_barras, nombre, descripcion, precio_venta
-                FROM ca_productos_varios 
-                WHERE codigo_barras = ? AND activo = 1
+                SELECT 'varios' as tipo, pv.codigo_interno, pv.codigo_barras, pv.nombre, 
+                       pv.descripcion, pv.precio_venta, COALESCE(i.stock_actual, 0) as stock_actual
+                FROM ca_productos_varios pv
+                LEFT JOIN inventario i ON pv.codigo_interno = i.codigo_interno
+                WHERE pv.codigo_barras = ? AND pv.activo = 1
             ''', (barcode,))
             
             result = cursor.fetchone()
@@ -532,9 +534,11 @@ class DatabaseManager:
             
             # Buscar en suplementos
             cursor.execute('''
-                SELECT 'suplemento' as tipo, codigo_interno, codigo_barras, nombre, descripcion, precio_venta
-                FROM ca_suplementos 
-                WHERE codigo_barras = ? AND activo = 1
+                SELECT 'suplemento' as tipo, s.codigo_interno, s.codigo_barras, s.nombre, 
+                       s.descripcion, s.precio_venta, COALESCE(i.stock_actual, 0) as stock_actual
+                FROM ca_suplementos s
+                LEFT JOIN inventario i ON s.codigo_interno = i.codigo_interno
+                WHERE s.codigo_barras = ? AND s.activo = 1
             ''', (barcode,))
             
             return cursor.fetchone()
@@ -550,9 +554,11 @@ class DatabaseManager:
             
             # Buscar en productos varios
             cursor.execute('''
-                SELECT 'varios' as tipo, codigo_interno, nombre, descripcion, precio_venta, categoria
-                FROM ca_productos_varios 
-                WHERE codigo_interno = ? AND activo = 1
+                SELECT 'varios' as tipo, pv.codigo_interno, pv.nombre, pv.descripcion, 
+                       pv.precio_venta, pv.categoria, COALESCE(i.stock_actual, 0) as stock_actual
+                FROM ca_productos_varios pv
+                LEFT JOIN inventario i ON pv.codigo_interno = i.codigo_interno
+                WHERE pv.codigo_interno = ? AND pv.activo = 1
             ''', (codigo_interno,))
             
             result = cursor.fetchone()
@@ -561,9 +567,11 @@ class DatabaseManager:
             
             # Buscar en suplementos
             cursor.execute('''
-                SELECT 'suplemento' as tipo, codigo_interno, nombre, descripcion, precio_venta, marca as categoria
-                FROM ca_suplementos 
-                WHERE codigo_interno = ? AND activo = 1
+                SELECT 'suplemento' as tipo, s.codigo_interno, s.nombre, s.descripcion, 
+                       s.precio_venta, s.marca as categoria, COALESCE(i.stock_actual, 0) as stock_actual
+                FROM ca_suplementos s
+                LEFT JOIN inventario i ON s.codigo_interno = i.codigo_interno
+                WHERE s.codigo_interno = ? AND s.activo = 1
             ''', (codigo_interno,))
             
             return cursor.fetchone()

@@ -959,3 +959,55 @@
 2025-11-08 00:36:47,343 - ERROR - Error cargando miembros: near "'7 days'": syntax error
 2025-11-08 00:36:49,592 - INFO - Ventana de búsqueda de miembros abierta
 2025-11-08 00:39:33,992 - INFO - Conexión a base de datos cerrada
+2025-11-19 12:59:29,645 - INFO - Tablas creadas correctamente con esquema de Supabase
+2025-11-19 12:59:29,647 - INFO - Inventario inicial sincronizado
+2025-11-19 12:59:29,648 - INFO - Base de datos inicializada correctamente
+2025-11-19 12:59:32,066 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-11-19 12:59:32,069 - INFO - Conexión a Supabase establecida
+2025-11-19 12:59:47,687 - INFO - Login exitoso: admin
+2025-11-19 12:59:47,687 - INFO - Usuario autenticado: admin
+2025-11-19 12:59:48,089 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/miembros?select=id_miembro&activo=eq.True "HTTP/2 200 OK"
+2025-11-19 12:59:48,270 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/registro_entradas?select=id_miembro&tipo_acceso=eq.miembro&fecha_entrada=gte.2025-11-19T00%3A00%3A00&fecha_entrada=lte.2025-11-19T23%3A59%3A59 "HTTP/2 200 OK"
+2025-11-19 12:59:48,407 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/lockers?select=id_locker&activo=eq.True "HTTP/2 200 OK"
+2025-11-19 12:59:48,566 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/asignaciones_activas?select=id_locker&activa=eq.True&cancelada=eq.False&id_locker=not.is.null "HTTP/2 200 OK"
+2025-11-19 12:59:48,582 - INFO - Monitor de entradas inicializado (PostgreSQL LISTEN/NOTIFY en localhost:5432)
+2025-11-19 12:59:48,582 - INFO - [OK] Monitor de entradas iniciado (PostgreSQL LISTEN en localhost:5432)
+2025-11-19 12:59:48,582 - INFO - Monitor de entradas iniciado correctamente
+2025-11-19 12:59:48,800 - INFO - [OK] Escuchando canal PostgreSQL: nueva_entrada_canal
+2025-11-19 12:59:54,365 - INFO - Abriendo widget de nueva venta
+2025-11-19 13:00:28,908 - INFO - Stock actualizado para BEB002: -2 unidades
+2025-11-19 13:00:28,908 - INFO - Venta creada exitosamente: ID 22, Total: $24.00
+2025-11-19 13:00:36,844 - INFO - Venta completada: ID 22, Total: $24.00
+2025-11-19 13:00:36,860 - INFO - Venta 22 procesada exitosamente: $0.00
+2025-11-19 13:00:39,276 - INFO - Cambio a pestaña: 0
+2025-11-19 13:00:39,276 - INFO - Volviendo a página de ventas
+2025-11-19 13:00:40,247 - INFO - Abriendo widget de historial
+2025-11-19 13:00:49,217 - INFO - Cambio a pestaña: 0
+2025-11-19 13:00:49,217 - INFO - Volviendo a página de ventas
+2025-11-19 13:00:58,551 - INFO - Cambio a pestaña: 1
+2025-11-19 13:01:03,687 - INFO - Cambio a pestaña: 2
+2025-11-19 13:01:04,339 - INFO - Cambio a pestaña: 3
+2025-11-19 13:01:05,132 - INFO - Cambio a pestaña: 4
+2025-11-19 13:01:05,706 - INFO - Cambio a pestaña: 3
+2025-11-19 13:01:06,550 - INFO - Cambio a pestaña: 2
+2025-11-19 13:01:09,612 - INFO - Cambio a pestaña: 1
+2025-11-19 13:01:10,314 - INFO - Cambio a pestaña: 0
+2025-11-19 13:01:25,522 - INFO - Cambio a pestaña: 2
+2025-11-19 13:01:26,426 - INFO - Cambio a pestaña: 1
+2025-11-19 13:01:27,206 - INFO - Cambio a pestaña: 2
+2025-11-19 13:01:44,334 - INFO - Cambio a pestaña: 1
+2025-11-19 13:01:45,231 - INFO - Cambio a pestaña: 2
+2025-11-19 13:01:46,981 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/miembros?select=%2A%2Casignaciones_activas%28fecha_fin%2Cactiva%2Ccancelada%2Cca_productos_digitales%28nombre%29%2Clockers%28numero%29%29&order=nombres.asc "HTTP/2 200 OK"
+2025-11-19 13:01:46,982 - INFO - Mostrando 0 miembros en tabla
+2025-11-19 13:01:46,982 - INFO - Miembros cargados desde Supabase: 0
+2025-11-19 13:01:46,992 - INFO - Ventana de búsqueda de miembros abierta
+2025-11-19 13:01:48,096 - INFO - Cambio a pestaña: 2
+2025-11-19 13:01:48,096 - INFO - Volviendo a página de miembros
+2025-11-19 13:01:49,026 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/registro_entradas?select=%2A%2Cmiembros%28nombres%2Capellido_paterno%2Capellido_materno%2Ccodigo_qr%29%2Cpersonal%28nombres%2Capellido_paterno%2Capellido_materno%2Cid_personal%2Cnumero_empleado%29&order=fecha_entrada.desc "HTTP/2 200 OK"
+2025-11-19 13:01:49,027 - INFO - Mostrando 0 accesos en tabla
+2025-11-19 13:01:49,027 - INFO - Accesos cargados: 0
+2025-11-19 13:01:49,038 - INFO - Ventana de historial de acceso abierta
+2025-11-19 13:08:44,872 - INFO - Conexion PostgreSQL cerrada
+2025-11-19 13:08:44,872 - INFO - Monitor de entradas detenido
+2025-11-19 13:08:44,872 - INFO - Monitor de entradas detenido
+2025-11-19 13:08:45,032 - INFO - Conexión a base de datos cerrada

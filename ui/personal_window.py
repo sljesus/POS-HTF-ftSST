@@ -63,11 +63,38 @@ class FormularioPersonalDialog(QDialog):
         
         row = 0
         
+        # Estilo para inputs
+        input_style = f"""
+            QLineEdit, QComboBox, QDateEdit {{
+                padding: 8px;
+                border: 2px solid #e5e7eb;
+                border-radius: 4px;
+                font-family: {WindowsPhoneTheme.FONT_FAMILY};
+                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+                background-color: white;
+            }}
+            QLineEdit:focus, QComboBox:focus, QDateEdit:focus {{
+                border-color: {WindowsPhoneTheme.TILE_BLUE};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 30px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #666;
+                margin-right: 10px;
+            }}
+        """
+        
         # Nombres
         grid.addWidget(StyledLabel("Nombres:", bold=True), row, 0)
         self.input_nombres = QLineEdit()
         self.input_nombres.setPlaceholderText("Nombre(s) del empleado")
         self.input_nombres.setMinimumHeight(40)
+        self.input_nombres.setStyleSheet(input_style)
         grid.addWidget(self.input_nombres, row, 1)
         row += 1
         
@@ -76,6 +103,7 @@ class FormularioPersonalDialog(QDialog):
         self.input_apellido_paterno = QLineEdit()
         self.input_apellido_paterno.setPlaceholderText("Apellido paterno")
         self.input_apellido_paterno.setMinimumHeight(40)
+        self.input_apellido_paterno.setStyleSheet(input_style)
         grid.addWidget(self.input_apellido_paterno, row, 1)
         row += 1
         
@@ -84,6 +112,7 @@ class FormularioPersonalDialog(QDialog):
         self.input_apellido_materno = QLineEdit()
         self.input_apellido_materno.setPlaceholderText("Apellido materno")
         self.input_apellido_materno.setMinimumHeight(40)
+        self.input_apellido_materno.setStyleSheet(input_style)
         grid.addWidget(self.input_apellido_materno, row, 1)
         row += 1
         
@@ -92,6 +121,7 @@ class FormularioPersonalDialog(QDialog):
         self.combo_rol = QComboBox()
         self.combo_rol.addItems(["entrenador", "limpieza", "mantenimiento", "nutriologo"])
         self.combo_rol.setMinimumHeight(40)
+        self.combo_rol.setStyleSheet(input_style)
         grid.addWidget(self.combo_rol, row, 1)
         row += 1
         
@@ -101,6 +131,7 @@ class FormularioPersonalDialog(QDialog):
         self.input_telefono.setPlaceholderText("10 dígitos")
         self.input_telefono.setMaxLength(20)
         self.input_telefono.setMinimumHeight(40)
+        self.input_telefono.setStyleSheet(input_style)
         grid.addWidget(self.input_telefono, row, 1)
         row += 1
         
@@ -109,6 +140,7 @@ class FormularioPersonalDialog(QDialog):
         self.input_email = QLineEdit()
         self.input_email.setPlaceholderText("correo@ejemplo.com")
         self.input_email.setMinimumHeight(40)
+        self.input_email.setStyleSheet(input_style)
         grid.addWidget(self.input_email, row, 1)
         row += 1
         
@@ -117,6 +149,7 @@ class FormularioPersonalDialog(QDialog):
         self.input_num_empleado = QLineEdit()
         self.input_num_empleado.setPlaceholderText("Opcional")
         self.input_num_empleado.setMinimumHeight(40)
+        self.input_num_empleado.setStyleSheet(input_style)
         grid.addWidget(self.input_num_empleado, row, 1)
         row += 1
         
@@ -126,6 +159,7 @@ class FormularioPersonalDialog(QDialog):
         self.input_fecha_contratacion.setDate(QDate.currentDate())
         self.input_fecha_contratacion.setCalendarPopup(True)
         self.input_fecha_contratacion.setMinimumHeight(40)
+        self.input_fecha_contratacion.setStyleSheet(input_style)
         grid.addWidget(self.input_fecha_contratacion, row, 1)
         row += 1
         
@@ -137,11 +171,11 @@ class FormularioPersonalDialog(QDialog):
         buttons_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
         
         btn_guardar = TileButton("Guardar", "fa5s.save", WindowsPhoneTheme.TILE_GREEN)
-        btn_guardar.setMinimumHeight(80)
+        btn_guardar.setMaximumHeight(120)
         btn_guardar.clicked.connect(self.guardar)
         
         btn_cancelar = TileButton("Cancelar", "fa5s.times", WindowsPhoneTheme.TILE_RED)
-        btn_cancelar.setMinimumHeight(80)
+        btn_cancelar.setMaximumHeight(120)
         btn_cancelar.clicked.connect(self.reject)
         
         buttons_layout.addWidget(btn_guardar)
@@ -309,6 +343,34 @@ class PersonalWindow(QWidget):
         header.setSectionResizeMode(4, QHeaderView.Stretch)  # Email
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Estado
         
+        # Aplicar estilos a la tabla
+        self.tabla_personal.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: white;
+                border: none;
+                gridline-color: #e5e7eb;
+                font-family: {WindowsPhoneTheme.FONT_FAMILY};
+                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+            }}
+            QTableWidget::item {{
+                padding: 8px;
+                border-bottom: 1px solid #e5e7eb;
+            }}
+            QTableWidget::item:selected {{
+                background-color: {WindowsPhoneTheme.TILE_BLUE};
+                color: white;
+            }}
+            QHeaderView::section {{
+                background-color: {WindowsPhoneTheme.PRIMARY_BLUE};
+                color: white;
+                padding: 8px;
+                border: none;
+                font-weight: bold;
+                font-family: {WindowsPhoneTheme.FONT_FAMILY};
+                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+            }}
+        """)
+        
         layout.addWidget(self.tabla_personal)
         
         # Botones de acción
@@ -316,19 +378,15 @@ class PersonalWindow(QWidget):
         buttons_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
         
         btn_agregar = TileButton("Agregar Personal", "fa5s.user-plus", WindowsPhoneTheme.TILE_GREEN)
-        btn_agregar.setMinimumHeight(100)
         btn_agregar.clicked.connect(self.agregar_personal)
         
         btn_editar = TileButton("Editar", "fa5s.edit", WindowsPhoneTheme.TILE_BLUE)
-        btn_editar.setMinimumHeight(100)
         btn_editar.clicked.connect(self.editar_personal)
         
         btn_desactivar = TileButton("Dar de Baja", "fa5s.user-times", WindowsPhoneTheme.TILE_ORANGE)
-        btn_desactivar.setMinimumHeight(100)
         btn_desactivar.clicked.connect(self.desactivar_personal)
         
         btn_volver = TileButton("Volver", "fa5s.arrow-left", WindowsPhoneTheme.TILE_RED)
-        btn_volver.setMinimumHeight(100)
         btn_volver.clicked.connect(self.cerrar_solicitado.emit)
         
         buttons_layout.addWidget(btn_agregar)

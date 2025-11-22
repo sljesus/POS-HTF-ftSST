@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox, QSpinBox, QDateEdit, QScrollArea,
     QLabel, QFrame
 )
-from PySide6.QtCore import Qt, Signal, QDate
+from PySide6.QtCore import Qt, Signal, QDate, QTimer, QEvent
 from PySide6.QtGui import QFont
 import logging
 
@@ -22,6 +22,7 @@ from ui.components import (
     show_info_dialog,
     show_warning_dialog,
     show_error_dialog,
+    show_success_dialog,
     show_confirmation_dialog
 )
 
@@ -37,6 +38,15 @@ class NuevoProductoWindow(QWidget):
         self.db_manager = db_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
+        
+        # Variable para evitar verificaciones duplicadas
+        self.ultimo_codigo_verificado = ""
+        
+        # Timer para detectar entrada del escáner
+        self.barcode_timer = QTimer()
+        self.barcode_timer.setSingleShot(True)
+        self.barcode_timer.setInterval(300)  # 300ms después de que deje de escribir
+        self.barcode_timer.timeout.connect(self._verificar_codigo_barras)
         
         self.setup_ui()
     
@@ -144,6 +154,10 @@ class NuevoProductoWindow(QWidget):
         self.codigo_barras_input = QLineEdit()
         self.codigo_barras_input.setPlaceholderText("Ej: 7501234567890")
         self.codigo_barras_input.setMinimumHeight(40)
+        # Instalar event filter para capturar Enter del scanner
+        self.codigo_barras_input.installEventFilter(self)
+        # Conectar señales
+        self.codigo_barras_input.textChanged.connect(self._on_barcode_text_changed)
         normales_form.addRow("Código de Barras:", self.codigo_barras_input)
         
         # Categoría
@@ -260,6 +274,107 @@ class NuevoProductoWindow(QWidget):
         # Mostrar/ocultar widgets correspondientes
         self.normales_widget.setVisible(is_normal)
         self.suplementos_widget.setVisible(not is_normal)
+    
+    def eventFilter(self, obj, event):
+        """Filtrar eventos para detectar Enter del scanner en código de barras"""
+        if obj == self.codigo_barras_input and event.type() == QEvent.KeyPress:
+            key_event = event
+            logging.info(f"[EVENT FILTER] Tecla presionada: {key_event.key()} (Enter={Qt.Key_Return})")
+            
+            if key_event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                logging.info("[EVENT FILTER] Enter detectado - verificando código de barras")
+                self._verificar_codigo_barras()
+                return True  # Evento manejado
+        
+        return super().eventFilter(obj, event)
+    
+    def _on_barcode_text_changed(self):
+        """Detectar cuando se ingresa texto (para capturar escáner)"""
+        texto = self.codigo_barras_input.text().strip()
+        
+        # Reiniciar el timer cada vez que cambia el texto
+        self.barcode_timer.stop()
+        
+        # Resetear el último código verificado si el usuario está editando
+        if len(texto) < 8:
+            self.ultimo_codigo_verificado = ""
+        
+        # Si el texto tiene longitud suficiente para ser un código de barras
+        if len(texto) >= 8:  # Códigos de barras típicamente tienen 8+ dígitos
+            logging.info(f"[SCANNER TIMER] Detectado código de longitud {len(texto)}, iniciando timer...")
+            # Iniciar timer para verificar después de 300ms de inactividad
+            self.barcode_timer.start()
+    
+    def _verificar_codigo_barras(self):
+        """Verificar si el código de barras ya existe cuando se presiona Enter"""
+        codigo_barras = self.codigo_barras_input.text().strip()
+        
+        # Evitar verificar el mismo código múltiples veces
+        if not codigo_barras or codigo_barras == self.ultimo_codigo_verificado:
+            return
+        
+        logging.info(f"[SCANNER] Verificando código de barras: '{codigo_barras}' (longitud: {len(codigo_barras)})")
+        self.ultimo_codigo_verificado = codigo_barras
+        
+        try:
+            # Buscar si ya existe el código de barras
+            cursor = self.db_manager.connection.cursor()
+            
+            # Buscar en productos varios
+            cursor.execute('''
+                SELECT codigo_interno, nombre 
+                FROM ca_productos_varios 
+                WHERE codigo_barras = ?
+            ''', (codigo_barras,))
+            
+            producto_varios = cursor.fetchone()
+            
+            if producto_varios:
+                logging.warning(f"Código de barras duplicado en productos varios: {codigo_barras}")
+                show_warning_dialog(
+                    self,
+                    "Código de barras duplicado",
+                    f"El código de barras ya existe en:\n\n"
+                    f"Código Interno: {producto_varios['codigo_interno']}\n"
+                    f"Nombre: {producto_varios['nombre']}"
+                )
+                self.codigo_barras_input.setFocus()
+                self.codigo_barras_input.selectAll()
+                return
+            
+            # Buscar en suplementos
+            cursor.execute('''
+                SELECT codigo_interno, nombre 
+                FROM ca_suplementos 
+                WHERE codigo_barras = ?
+            ''', (codigo_barras,))
+            
+            producto_suplemento = cursor.fetchone()
+            
+            if producto_suplemento:
+                logging.warning(f"Código de barras duplicado en suplementos: {codigo_barras}")
+                show_warning_dialog(
+                    self,
+                    "Código de barras duplicado",
+                    f"El código de barras ya existe en:\n\n"
+                    f"Código Interno: {producto_suplemento['codigo_interno']}\n"
+                    f"Nombre: {producto_suplemento['nombre']}"
+                )
+                self.codigo_barras_input.setFocus()
+                self.codigo_barras_input.selectAll()
+                return
+            
+            # Si no existe, mover al siguiente campo sin diálogo
+            logging.info(f"[SCANNER] Código de barras {codigo_barras} disponible - moviendo al siguiente campo")
+            self.nombre_input.setFocus()
+            
+        except Exception as e:
+            logging.error(f"Error verificando código de barras: {e}")
+            show_error_dialog(
+                self,
+                "Error de verificación",
+                "No se pudo verificar el código de barras"
+            )
     
     def limpiar_formulario(self):
         """Limpiar todos los campos del formulario"""

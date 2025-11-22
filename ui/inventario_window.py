@@ -6,9 +6,11 @@ Usando componentes reutilizables del sistema de diseño
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QLineEdit, QSizePolicy, QFrame
+    QHeaderView, QLineEdit, QSizePolicy, QFrame,
+    QComboBox, QCheckBox
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QFont
 import logging
 
 # Importar componentes del sistema de diseño
@@ -37,6 +39,12 @@ class InventarioWindow(QWidget):
         self.user_data = user_data
         self.productos_data = []
         
+        # Timer para detectar entrada del escáner
+        self.scanner_timer = QTimer()
+        self.scanner_timer.setSingleShot(True)
+        self.scanner_timer.setInterval(300)  # 300ms después de que deje de escribir
+        self.scanner_timer.timeout.connect(self.filtrar_inventario)
+        
         self.setup_ui()
         self.cargar_inventario()
     
@@ -52,9 +60,146 @@ class InventarioWindow(QWidget):
         content.setLayout(content_layout)
         
         # Buscador
-        self.search_bar = SearchBar("Buscar por código, nombre o categoría...")
-        self.search_bar.connect_search(self.filtrar_inventario)
+        self.search_bar = SearchBar("Buscar por código interno, código de barras, nombre o categoría...")
+        self.search_bar.connect_search(self.on_search_changed)
         content_layout.addWidget(self.search_bar)
+        
+        # Panel de filtros
+        filters_panel = ContentPanel()
+        filters_layout = QHBoxLayout(filters_panel)
+        filters_layout.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
+        
+        # Filtro por categoría
+        categoria_container = QWidget()
+        categoria_layout = QVBoxLayout(categoria_container)
+        categoria_layout.setContentsMargins(0, 0, 0, 0)
+        categoria_layout.setSpacing(4)
+        
+        categoria_label = StyledLabel("Categoría:", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        categoria_layout.addWidget(categoria_label)
+        
+        self.categoria_combo = QComboBox()
+        self.categoria_combo.setMinimumHeight(40)
+        self.categoria_combo.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.categoria_combo.currentTextChanged.connect(self.aplicar_filtros)
+        categoria_layout.addWidget(self.categoria_combo)
+        
+        filters_layout.addWidget(categoria_container, stretch=1)
+        
+        # Filtro por tipo de producto
+        tipo_container = QWidget()
+        tipo_layout = QVBoxLayout(tipo_container)
+        tipo_layout.setContentsMargins(0, 0, 0, 0)
+        tipo_layout.setSpacing(4)
+        
+        tipo_label = StyledLabel("Tipo:", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        tipo_layout.addWidget(tipo_label)
+        
+        self.tipo_combo = QComboBox()
+        self.tipo_combo.addItems(["Todos", "Producto Varios", "Suplemento"])
+        self.tipo_combo.setMinimumHeight(40)
+        self.tipo_combo.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.tipo_combo.currentTextChanged.connect(self.aplicar_filtros)
+        tipo_layout.addWidget(self.tipo_combo)
+        
+        filters_layout.addWidget(tipo_container, stretch=1)
+        
+        # Filtro por estado de stock
+        stock_container = QWidget()
+        stock_layout = QVBoxLayout(stock_container)
+        stock_layout.setContentsMargins(0, 0, 0, 0)
+        stock_layout.setSpacing(4)
+        
+        stock_label = StyledLabel("Stock:", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        stock_layout.addWidget(stock_label)
+        
+        self.stock_combo = QComboBox()
+        self.stock_combo.addItems(["Todos", "Bajo Stock", "Sin Stock", "Stock Normal"])
+        self.stock_combo.setMinimumHeight(40)
+        self.stock_combo.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.stock_combo.currentTextChanged.connect(self.aplicar_filtros)
+        stock_layout.addWidget(self.stock_combo)
+        
+        filters_layout.addWidget(stock_container, stretch=1)
+        
+        # Filtro por ubicación
+        ubicacion_container = QWidget()
+        ubicacion_layout = QVBoxLayout(ubicacion_container)
+        ubicacion_layout.setContentsMargins(0, 0, 0, 0)
+        ubicacion_layout.setSpacing(4)
+        
+        ubicacion_label = StyledLabel("Ubicación:", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        ubicacion_layout.addWidget(ubicacion_label)
+        
+        self.ubicacion_combo = QComboBox()
+        self.ubicacion_combo.setMinimumHeight(40)
+        self.ubicacion_combo.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.ubicacion_combo.currentTextChanged.connect(self.aplicar_filtros)
+        ubicacion_layout.addWidget(self.ubicacion_combo)
+        
+        filters_layout.addWidget(ubicacion_container, stretch=1)
+        
+        # Checkbox solo activos
+        activos_container = QWidget()
+        activos_layout = QVBoxLayout(activos_container)
+        activos_layout.setContentsMargins(0, 0, 0, 0)
+        activos_layout.setSpacing(4)
+        
+        activos_spacer = StyledLabel("", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        activos_layout.addWidget(activos_spacer)
+        
+        self.check_solo_activos = QCheckBox("Solo activos")
+        self.check_solo_activos.setChecked(True)
+        self.check_solo_activos.setMinimumHeight(40)
+        self.check_solo_activos.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.check_solo_activos.setStyleSheet(f"""
+            QCheckBox {{
+                spacing: 8px;
+                color: #333;
+            }}
+            QCheckBox::indicator {{
+                width: 20px;
+                height: 20px;
+                border: 2px solid #cccccc;
+                border-radius: 3px;
+                background-color: white;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {WindowsPhoneTheme.TILE_BLUE};
+                border-color: {WindowsPhoneTheme.TILE_BLUE};
+                image: none;
+            }}
+            QCheckBox::indicator:checked:after {{
+                content: "✓";
+                color: white;
+                font-weight: bold;
+            }}
+        """)
+        self.check_solo_activos.stateChanged.connect(self.aplicar_filtros)
+        activos_layout.addWidget(self.check_solo_activos)
+        
+        filters_layout.addWidget(activos_container, stretch=1)
+        
+        # Botón limpiar filtros
+        btn_limpiar_container = QWidget()
+        btn_limpiar_layout = QVBoxLayout(btn_limpiar_container)
+        btn_limpiar_layout.setContentsMargins(0, 0, 0, 0)
+        btn_limpiar_layout.setSpacing(4)
+        
+        limpiar_spacer = StyledLabel("", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        btn_limpiar_layout.addWidget(limpiar_spacer)
+        
+        btn_limpiar = QPushButton("Limpiar")
+        btn_limpiar.setMinimumHeight(40)
+        btn_limpiar.setMinimumWidth(100)
+        btn_limpiar.setObjectName("tileButton")
+        btn_limpiar.setProperty("tileColor", WindowsPhoneTheme.TILE_ORANGE)
+        btn_limpiar.clicked.connect(self.limpiar_filtros)
+        btn_limpiar_layout.addWidget(btn_limpiar)
+        
+        filters_layout.addWidget(btn_limpiar_container)
+        
+        content_layout.addWidget(filters_panel)
         
         # Panel para la tabla
         table_panel = ContentPanel()
@@ -115,6 +260,15 @@ class InventarioWindow(QWidget):
         table_layout.addWidget(self.inventory_table)
         content_layout.addWidget(table_panel)
         
+        # Panel de información
+        info_panel = ContentPanel()
+        info_layout = QHBoxLayout(info_panel)
+        
+        self.info_label = StyledLabel("", size=WindowsPhoneTheme.FONT_SIZE_SMALL)
+        info_layout.addWidget(self.info_label, stretch=1)
+        
+        content_layout.addWidget(info_panel)
+        
         # Botones de acción
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
@@ -149,6 +303,7 @@ class InventarioWindow(QWidget):
             cursor.execute("""
                 SELECT 
                     i.codigo_interno,
+                    COALESCE(pv.codigo_barras, s.codigo_barras) as codigo_barras,
                     COALESCE(pv.nombre, s.nombre) as nombre,
                     COALESCE(pv.categoria, 'Suplemento') as categoria,
                     COALESCE(pv.precio_venta, s.precio_venta) as precio,
@@ -168,7 +323,19 @@ class InventarioWindow(QWidget):
             rows = cursor.fetchall()
             self.productos_data = [dict(zip(columns, row)) for row in rows]
             
-            self.mostrar_inventario(self.productos_data)
+            # Poblar combo de categorías
+            categorias = sorted(set(p['categoria'] for p in self.productos_data if p['categoria']))
+            self.categoria_combo.clear()
+            self.categoria_combo.addItem("Todas")
+            self.categoria_combo.addItems(categorias)
+            
+            # Poblar combo de ubicaciones
+            ubicaciones = sorted(set(p.get('ubicacion') for p in self.productos_data if p.get('ubicacion')))
+            self.ubicacion_combo.clear()
+            self.ubicacion_combo.addItem("Todas")
+            self.ubicacion_combo.addItems(ubicaciones)
+            
+            self.aplicar_filtros()
             
             logging.info(f"Inventario cargado: {len(self.productos_data)} productos")
             
@@ -227,24 +394,100 @@ class InventarioWindow(QWidget):
             if not producto['activo']:
                 estado_item.setForeground(Qt.gray)
             self.inventory_table.setItem(row, 7, estado_item)
+        
+        # Actualizar información
+        total_productos = len(productos)
+        total_general = len(self.productos_data)
+        
+        if total_productos == total_general:
+            self.info_label.setText(f"Total de productos: {total_productos}")
+        else:
+            self.info_label.setText(f"Mostrando {total_productos} de {total_general} productos")
+    
+    def on_search_changed(self):
+        """Manejar cambio en el campo de búsqueda con timer para escáner"""
+        # Reiniciar el timer cada vez que se escribe
+        self.scanner_timer.stop()
+        self.scanner_timer.start()
+    
+    def aplicar_filtros(self):
+        """Aplicar todos los filtros seleccionados"""
+        try:
+            texto_busqueda = self.search_bar.text().lower()
+            categoria_seleccionada = self.categoria_combo.currentText()
+            tipo_seleccionado = self.tipo_combo.currentText()
+            stock_seleccionado = self.stock_combo.currentText()
+            ubicacion_seleccionada = self.ubicacion_combo.currentText()
+            solo_activos = self.check_solo_activos.isChecked()
+            
+            productos_filtrados = []
+            
+            for producto in self.productos_data:
+                # Filtro de búsqueda de texto
+                if texto_busqueda:
+                    texto_match = (
+                        texto_busqueda in producto['codigo_interno'].lower()
+                        or texto_busqueda in producto['nombre'].lower()
+                        or texto_busqueda in producto['categoria'].lower()
+                        or (producto.get('codigo_barras') and texto_busqueda in producto['codigo_barras'].lower())
+                    )
+                    if not texto_match:
+                        continue
+                
+                # Filtro de categoría
+                if categoria_seleccionada != "Todas":
+                    if producto['categoria'] != categoria_seleccionada:
+                        continue
+                
+                # Filtro de tipo de producto
+                if tipo_seleccionado == "Producto Varios":
+                    if producto['tipo_producto'] != 'producto_varios':
+                        continue
+                elif tipo_seleccionado == "Suplemento":
+                    if producto['tipo_producto'] != 'suplemento':
+                        continue
+                
+                # Filtro de estado de stock
+                if stock_seleccionado == "Bajo Stock":
+                    if producto['stock_actual'] > producto['stock_minimo']:
+                        continue
+                elif stock_seleccionado == "Sin Stock":
+                    if producto['stock_actual'] > 0:
+                        continue
+                elif stock_seleccionado == "Stock Normal":
+                    if producto['stock_actual'] <= producto['stock_minimo']:
+                        continue
+                
+                # Filtro de ubicación
+                if ubicacion_seleccionada != "Todas":
+                    if producto.get('ubicacion') != ubicacion_seleccionada:
+                        continue
+                
+                # Filtro de activos
+                if solo_activos and not producto['activo']:
+                    continue
+                
+                productos_filtrados.append(producto)
+            
+            self.mostrar_inventario(productos_filtrados)
+            
+        except Exception as e:
+            logging.error(f"Error aplicando filtros: {e}")
+            self.mostrar_inventario(self.productos_data)
     
     def filtrar_inventario(self):
-        """Filtrar inventario según búsqueda"""
-        texto_busqueda = self.search_bar.get_text().lower()
-        
-        if not texto_busqueda:
-            self.mostrar_inventario(self.productos_data)
-            return
-        
-        productos_filtrados = [
-            p for p in self.productos_data
-            if texto_busqueda in p['codigo_interno'].lower()
-            or texto_busqueda in p['nombre'].lower()
-            or texto_busqueda in p['categoria'].lower()
-        ]
-        
-        self.mostrar_inventario(productos_filtrados)
-        logging.info(f"Filtrado: {len(productos_filtrados)} productos encontrados")
+        """Filtrar inventario (llamado por el timer del escáner)"""
+        self.aplicar_filtros()
+    
+    def limpiar_filtros(self):
+        """Limpiar todos los filtros"""
+        self.search_bar.clear()
+        self.categoria_combo.setCurrentIndex(0)
+        self.tipo_combo.setCurrentIndex(0)
+        self.stock_combo.setCurrentIndex(0)
+        self.ubicacion_combo.setCurrentIndex(0)
+        self.check_solo_activos.setChecked(True)
+        self.aplicar_filtros()
     
     def filtrar_bajo_stock(self):
         """Filtrar productos con stock bajo o menor al mínimo"""

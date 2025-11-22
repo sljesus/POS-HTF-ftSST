@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QLabel, QComboBox, QDateEdit, QScrollArea,
     QFrame, QSizePolicy
 )
-from PySide6.QtCore import Qt, Signal, QDate
+from PySide6.QtCore import Qt, Signal, QDate, QEvent, QTimer
 from PySide6.QtGui import QFont
 import logging
 from datetime import datetime
@@ -22,6 +22,7 @@ from ui.components import (
     create_page_layout,
     ContentPanel,
     StyledLabel,
+    SearchBar,
     show_info_dialog,
     show_warning_dialog,
     show_error_dialog,
@@ -42,6 +43,12 @@ class MovimientoInventarioWindow(QWidget):
         self.supabase_service = supabase_service
         self.user_data = user_data
         self.producto_seleccionado = None
+        
+        # Timer para detectar entrada del escáner
+        self.scanner_timer = QTimer()
+        self.scanner_timer.setSingleShot(True)
+        self.scanner_timer.setInterval(300)  # 300ms después de que deje de escribir
+        self.scanner_timer.timeout.connect(self.buscar_producto)
         
         self.setup_ui()
     
@@ -98,27 +105,12 @@ class MovimientoInventarioWindow(QWidget):
         search_label = StyledLabel("Buscar Producto", bold=True, size=WindowsPhoneTheme.FONT_SIZE_SUBTITLE)
         panel_layout.addWidget(search_label)
         
-        search_container = QWidget()
-        search_layout = QHBoxLayout(search_container)
-        search_layout.setContentsMargins(0, 0, 0, 0)
-        search_layout.setSpacing(WindowsPhoneTheme.MARGIN_SMALL)
-        
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Ingresa código interno o código de barras")
-        self.search_input.setMinimumHeight(46)
-        self.search_input.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
-        self.search_input.returnPressed.connect(self.buscar_producto)
-        search_layout.addWidget(self.search_input)
-        
-        btn_buscar = QPushButton("🔍 Buscar")
-        btn_buscar.setMinimumHeight(46)
-        btn_buscar.setMinimumWidth(120)
-        btn_buscar.setObjectName("tileButton")
-        btn_buscar.setProperty("tileColor", WindowsPhoneTheme.TILE_BLUE)
-        btn_buscar.clicked.connect(self.buscar_producto)
-        search_layout.addWidget(btn_buscar)
-        
-        panel_layout.addWidget(search_container)
+        self.search_bar = SearchBar("Código interno o código de barras...")
+        self.search_bar.search_input.installEventFilter(self)
+        self.search_bar.search_input.returnPressed.connect(self.buscar_producto)
+        self.search_bar.search_input.textChanged.connect(self._on_search_text_changed)
+        self.search_bar.search_button.clicked.connect(self.buscar_producto)
+        panel_layout.addWidget(self.search_bar)
         
         # Información del producto encontrado
         self.producto_info_label = StyledLabel("", size=WindowsPhoneTheme.FONT_SIZE_NORMAL)
@@ -209,7 +201,7 @@ class MovimientoInventarioWindow(QWidget):
         btn_guardar = TileButton(
             "Registrar " + ("Entrada" if self.tipo_movimiento == "entrada" else "Salida"),
             "fa5s.check",
-            color
+            WindowsPhoneTheme.TILE_GREEN  # Siempre verde
         )
         btn_guardar.clicked.connect(self.registrar_movimiento)
         
@@ -222,9 +214,34 @@ class MovimientoInventarioWindow(QWidget):
         main_layout.addLayout(buttons_layout)
         layout.addWidget(main_container)
     
+    def eventFilter(self, obj, event):
+        """Filtrar eventos para detectar Enter del scanner en búsqueda de producto"""
+        if obj == self.search_bar.search_input and event.type() == QEvent.KeyPress:
+            key_event = event
+            # Solo loguear si es Enter, para no saturar el log
+            if key_event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                logging.info("[SCANNER] Enter detectado - buscando producto")
+                self.buscar_producto()
+                return True  # Evento manejado
+        
+        return super().eventFilter(obj, event)
+    
+    def _on_search_text_changed(self):
+        """Detectar cuando se ingresa texto (para capturar escáner)"""
+        texto = self.search_bar.search_input.text().strip()
+        
+        # Reiniciar el timer cada vez que cambia el texto
+        self.scanner_timer.stop()
+        
+        # Si el texto tiene longitud suficiente para ser un código
+        if len(texto) >= 6:  # Códigos típicamente tienen 6+ caracteres
+            logging.info(f"[SCANNER] Código detectado (longitud {len(texto)}), iniciando timer...")
+            # Iniciar timer para buscar después de 300ms de inactividad
+            self.scanner_timer.start()
+    
     def buscar_producto(self):
         """Buscar producto por código"""
-        codigo = self.search_input.text().strip()
+        codigo = self.search_bar.search_input.text().strip()
         
         if not codigo:
             show_warning_dialog(
@@ -246,11 +263,12 @@ class MovimientoInventarioWindow(QWidget):
                 self.producto_seleccionado = producto
                 
                 # Mostrar información del producto
+                stock_actual = producto['stock_actual'] if producto['stock_actual'] else 0
                 info_text = (
                     f"✓ Producto encontrado\n"
                     f"Código: {producto['codigo_interno']}\n"
                     f"Nombre: {producto['nombre']}\n"
-                    f"Stock actual: {producto.get('stock_actual', 0)} unidades"
+                    f"Stock actual: {stock_actual} unidades"
                 )
                 
                 self.producto_info_label.setText(info_text)
@@ -298,7 +316,7 @@ class MovimientoInventarioWindow(QWidget):
         
         # Validar stock suficiente para salidas
         if self.tipo_movimiento == "salida":
-            stock_actual = self.producto_seleccionado.get('stock_actual', 0)
+            stock_actual = self.producto_seleccionado['stock_actual'] if self.producto_seleccionado['stock_actual'] else 0
             if cantidad > stock_actual:
                 show_warning_dialog(
                     self,
@@ -316,42 +334,53 @@ class MovimientoInventarioWindow(QWidget):
             # Actualizar stock en inventario
             cursor = self.db_manager.connection.cursor()
             
+            # Obtener stock actual antes del movimiento
+            cursor.execute("SELECT stock_actual FROM inventario WHERE codigo_interno = ?", 
+                          (self.producto_seleccionado['codigo_interno'],))
+            stock_anterior = cursor.fetchone()[0]
+            
             if self.tipo_movimiento == "entrada":
                 # Incrementar stock
+                nuevo_stock = stock_anterior + cantidad
                 cursor.execute("""
                     UPDATE inventario 
-                    SET stock_actual = stock_actual + ?,
-                        fecha_ultima_actualizacion = CURRENT_TIMESTAMP
+                    SET stock_actual = ?,
+                        fecha_ultima_entrada = CURRENT_TIMESTAMP
                     WHERE codigo_interno = ?
-                """, (cantidad, self.producto_seleccionado['codigo_interno']))
+                """, (nuevo_stock, self.producto_seleccionado['codigo_interno']))
             else:
                 # Decrementar stock
+                nuevo_stock = stock_anterior - cantidad
                 cursor.execute("""
                     UPDATE inventario 
-                    SET stock_actual = stock_actual - ?,
-                        fecha_ultima_actualizacion = CURRENT_TIMESTAMP
+                    SET stock_actual = ?,
+                        fecha_ultima_salida = CURRENT_TIMESTAMP
                     WHERE codigo_interno = ?
-                """, (cantidad, self.producto_seleccionado['codigo_interno']))
+                """, (nuevo_stock, self.producto_seleccionado['codigo_interno']))
             
             # Registrar el movimiento en la tabla de movimientos
             cursor.execute("""
                 INSERT INTO movimientos_inventario (
                     codigo_interno,
+                    tipo_producto,
                     tipo_movimiento,
                     cantidad,
+                    stock_anterior,
+                    stock_nuevo,
                     motivo,
                     fecha,
-                    usuario_id,
-                    observaciones
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    id_usuario
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 self.producto_seleccionado['codigo_interno'],
+                self.producto_seleccionado['tipo'],
                 self.tipo_movimiento,
-                cantidad,
+                cantidad if self.tipo_movimiento == "entrada" else -cantidad,  # Positivo para entrada, negativo para salida
+                stock_anterior,
+                nuevo_stock,
                 tipo,
                 fecha,
-                self.user_data.get('id_usuario'),
-                observaciones
+                self.user_data.get('id') or self.user_data.get('id_usuario')  # Soportar ambas claves
             ))
             
             self.db_manager.connection.commit()

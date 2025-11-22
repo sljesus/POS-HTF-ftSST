@@ -30,6 +30,9 @@ class WindowsPhoneTheme:
     BG_BLACK = "#000000"
     BG_LIGHT = "#f5f5f5"
     
+    # Colores de bordes
+    BORDER_COLOR = "#e0e0e0"
+    
     # Fuente
     FONT_FAMILY = "Segoe UI"
     
@@ -311,6 +314,10 @@ class SearchBar(QWidget):
     def text(self):
         """Obtener texto del input"""
         return self.search_input.text()
+    
+    def clear(self):
+        """Limpiar el input de búsqueda"""
+        self.search_input.clear()
     
     def connect_search(self, slot):
         """Conectar señal de búsqueda"""
