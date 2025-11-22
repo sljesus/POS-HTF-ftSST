@@ -3,7 +3,9 @@
 
 # PyInstaller
 build/
+dist/
 *.spec
+*.exe
 
 # Python
 __pycache__/
