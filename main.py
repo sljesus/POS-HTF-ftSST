@@ -13,7 +13,7 @@ from PySide6.QtGui import QFont
 
 from ui.login_window_pyside import LoginWindow
 from ui.main_pos_window import MainPOSWindow
-from database.db_manager import DatabaseManager
+from database.postgres_manager import PostgresManager
 from services.supabase_service import SupabaseService
 from utils.config import Config
 
@@ -39,8 +39,9 @@ class POSApplication:
         self.config = Config()
         
         # Inicializar servicios
-        self.db_manager = DatabaseManager()
-        if not self.db_manager.initialize_database():
+        db_config = self.config.get_postgres_config()
+        self.postgres_manager = PostgresManager(db_config)
+        if not self.postgres_manager.initialize_database():
             logging.error("Fallo al inicializar la base de datos")
             sys.exit(1)
         
@@ -56,7 +57,7 @@ class POSApplication:
     def show_login(self):
         """Mostrar ventana de login"""
         try:
-            login_window = LoginWindow(self.db_manager, self.supabase_service)
+            login_window = LoginWindow(self.postgres_manager, self.supabase_service)
             login_window.login_success.connect(self.on_login_success)
             login_window.show()
             
@@ -87,7 +88,7 @@ class POSApplication:
         try:
             self.main_window = MainPOSWindow(
                 self.current_user,
-                self.db_manager,
+                self.postgres_manager,
                 self.supabase_service
             )
             self.main_window.logout_requested.connect(self.on_logout)

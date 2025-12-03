@@ -5,10 +5,10 @@ Muestra información del miembro con foto al registrar entrada
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QWidget
+    QFrame, QWidget, QGraphicsOpacityEffect, QGridLayout
 )
-from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor
+from PySide6.QtCore import Qt, Signal, QSize, QPropertyAnimation, QEasingCurve, QThread, pyqtSignal
+from PySide6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor, QCursor
 import logging
 from datetime import datetime
 import os
@@ -19,6 +19,26 @@ from ui.components import (
 )
 
 
+class FotoLoaderThread(QThread):
+    """Hilo para cargar la foto del miembro de forma asíncrona"""
+    foto_loaded = pyqtSignal(QPixmap)
+    
+    def __init__(self, foto_path):
+        super().__init__()
+        self.foto_path = foto_path
+    
+    def run(self):
+        """Cargar la foto en un hilo separado"""
+        if self.foto_path and os.path.exists(self.foto_path):
+            pixmap = QPixmap(self.foto_path)
+            if not pixmap.isNull():
+                self.foto_loaded.emit(pixmap)
+                return
+        
+        # Si no hay foto o hay error, emitir None
+        self.foto_loaded.emit(None)
+
+
 class AccesoMiembroDialog(QDialog):
     """Diálogo para mostrar información del miembro al registrar acceso"""
     
@@ -27,24 +47,67 @@ class AccesoMiembroDialog(QDialog):
     def __init__(self, miembro_data, parent=None):
         super().__init__(parent)
         self.miembro_data = miembro_data
+        self.foto_thread = None
+        
+        # Configuración de ventana
         self.setWindowTitle("Acceso al Gimnasio")
         self.setModal(True)
         self.setMinimumWidth(600)
         self.setMinimumHeight(500)
         
+        # Configurar flags para ventana sin bordes
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # Variables para arrastre
+        self.dragging = False
+        self.drag_position = None
+        
+        # Efecto de opacidad para animaciones
+        self.opacity_effect = QGraphicsOpacityEffect()
+        self.setGraphicsEffect(self.opacity_effect)
+        
+        # Configurar UI
         self.setup_ui()
         self.aplicar_estilos()
+        
+        # Cargar foto de forma asíncrona
+        self.cargar_foto_async()
     
     def setup_ui(self):
         """Configurar interfaz del diálogo"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        # Layout principal con margen para sombra
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Contenedor principal
+        container = QFrame()
+        container.setObjectName("dialogContainer")
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
         
         # ===== ENCABEZADO =====
+        header = self.create_header()
+        container_layout.addWidget(header)
+        
+        # ===== CONTENIDO PRINCIPAL =====
+        content = self.create_content()
+        container_layout.addWidget(content)
+        
+        # ===== BOTONES DE ACCIÓN =====
+        buttons_layout = self.create_buttons_layout()
+        container_layout.addLayout(buttons_layout)
+        
+        main_layout.addWidget(container)
+    
+    def create_header(self):
+        """Crear el encabezado del diálogo"""
         header = QFrame()
         header.setObjectName("dialogHeader")
         header.setMinimumHeight(80)
+        header.setCursor(QCursor(Qt.OpenHandCursor))  # Cursor para indicar que se puede arrastrar
+        
         header_layout = QVBoxLayout(header)
         header_layout.setContentsMargins(30, 20, 30, 20)
         
@@ -54,14 +117,15 @@ class AccesoMiembroDialog(QDialog):
         title.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(title)
         
-        hora = QLabel(datetime.now().strftime("%d/%m/%Y - %H:%M:%S"))
-        hora.setStyleSheet(f"color: white; font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;")
-        hora.setAlignment(Qt.AlignCenter)
-        header_layout.addWidget(hora)
+        self.hora_label = QLabel(datetime.now().strftime("%d/%m/%Y - %H:%M:%S"))
+        self.hora_label.setStyleSheet(f"color: white; font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;")
+        self.hora_label.setAlignment(Qt.AlignCenter)
+        header_layout.addWidget(self.hora_label)
         
-        layout.addWidget(header)
-        
-        # ===== CONTENIDO PRINCIPAL =====
+        return header
+    
+    def create_content(self):
+        """Crear el contenido principal del diálogo"""
         content = QWidget()
         content.setObjectName("dialogContent")
         content_layout = QVBoxLayout(content)
@@ -77,13 +141,23 @@ class AccesoMiembroDialog(QDialog):
         self.foto_label.setAlignment(Qt.AlignCenter)
         self.foto_label.setObjectName("fotoMiembro")
         
-        # Cargar foto del miembro o usar placeholder
-        self.cargar_foto()
+        # Mostrar placeholder inicialmente
+        self.mostrar_placeholder()
         
         foto_container.addWidget(self.foto_label)
         content_layout.addLayout(foto_container)
         
         # ===== DATOS DEL MIEMBRO =====
+        datos_container = self.create_datos_container()
+        content_layout.addWidget(datos_container)
+        
+        # Espaciador
+        content_layout.addStretch()
+        
+        return content
+    
+    def create_datos_container(self):
+        """Crear el contenedor con los datos del miembro"""
         datos_container = QFrame()
         datos_container.setObjectName("datosContainer")
         datos_layout = QVBoxLayout(datos_container)
@@ -91,7 +165,7 @@ class AccesoMiembroDialog(QDialog):
         datos_layout.setSpacing(15)
         
         # Nombre completo
-        nombre_completo = f"{self.miembro_data['nombres']} {self.miembro_data['apellido_paterno']} {self.miembro_data['apellido_materno']}"
+        nombre_completo = f"{self.miembro_data.get('nombres', '')} {self.miembro_data.get('apellido_paterno', '')} {self.miembro_data.get('apellido_materno', '')}".strip()
         nombre_label = QLabel(nombre_completo.upper())
         nombre_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 20, QFont.Bold))
         nombre_label.setAlignment(Qt.AlignCenter)
@@ -106,38 +180,34 @@ class AccesoMiembroDialog(QDialog):
         datos_layout.addWidget(line)
         
         # Información adicional en grid
-        info_layout = QVBoxLayout()
+        info_layout = QGridLayout()
         info_layout.setSpacing(12)
         
         # ID Miembro
-        self.agregar_info_row(info_layout, "ID Miembro:", f"#{self.miembro_data['id_miembro']}")
+        self.agregar_info_row(info_layout, 0, "ID Miembro:", f"#{self.miembro_data.get('id_miembro', 'N/A')}")
         
         # Fecha de registro
         fecha_registro = self.miembro_data.get('fecha_registro', 'N/A')
-        self.agregar_info_row(info_layout, "Miembro desde:", fecha_registro)
+        self.agregar_info_row(info_layout, 1, "Miembro desde:", fecha_registro)
         
         # Teléfono
         telefono = self.miembro_data.get('telefono', 'No registrado')
-        self.agregar_info_row(info_layout, "Teléfono:", telefono)
+        self.agregar_info_row(info_layout, 2, "Teléfono:", telefono)
         
         # Email
         email = self.miembro_data.get('email', 'No registrado')
-        self.agregar_info_row(info_layout, "Email:", email)
+        self.agregar_info_row(info_layout, 3, "Email:", email)
         
         # Estado
         estado = "ACTIVO" if self.miembro_data.get('activo', False) else "INACTIVO"
         estado_color = WindowsPhoneTheme.TILE_GREEN if self.miembro_data.get('activo', False) else WindowsPhoneTheme.TILE_RED
-        self.agregar_info_row(info_layout, "Estado:", estado, estado_color)
+        self.agregar_info_row(info_layout, 4, "Estado:", estado, estado_color)
         
         datos_layout.addLayout(info_layout)
-        content_layout.addWidget(datos_container)
-        
-        # Espaciador
-        content_layout.addStretch()
-        
-        layout.addWidget(content)
-        
-        # ===== BOTONES DE ACCIÓN =====
+        return datos_container
+    
+    def create_buttons_layout(self):
+        """Crear el layout con los botones de acción"""
         buttons_layout = QHBoxLayout()
         buttons_layout.setContentsMargins(40, 20, 40, 30)
         buttons_layout.setSpacing(20)
@@ -166,22 +236,19 @@ class AccesoMiembroDialog(QDialog):
             WindowsPhoneTheme.TILE_RED
         )
         btn_cancelar.setMinimumHeight(100)
-        btn_cancelar.clicked.connect(self.reject)
+        btn_cancelar.clicked.connect(self.close_with_animation)
         buttons_layout.addWidget(btn_cancelar, 1)
         
-        layout.addLayout(buttons_layout)
+        return buttons_layout
     
-    def agregar_info_row(self, layout, etiqueta, valor, color_valor=None):
-        """Agregar una fila de información"""
-        row = QHBoxLayout()
-        row.setSpacing(10)
-        
+    def agregar_info_row(self, layout, row, etiqueta, valor, color_valor=None):
+        """Agregar una fila de información al grid"""
         # Etiqueta
         label_etiqueta = QLabel(etiqueta)
         label_etiqueta.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
         label_etiqueta.setStyleSheet("color: #6b7280;")
         label_etiqueta.setMinimumWidth(150)
-        row.addWidget(label_etiqueta)
+        layout.addWidget(label_etiqueta, row, 0)
         
         # Valor
         label_valor = QLabel(valor)
@@ -190,32 +257,31 @@ class AccesoMiembroDialog(QDialog):
             label_valor.setStyleSheet(f"color: {color_valor}; font-weight: bold;")
         else:
             label_valor.setStyleSheet("color: #1f2937;")
-        row.addWidget(label_valor)
-        row.addStretch()
-        
-        layout.addLayout(row)
+        layout.addWidget(label_valor, row, 1)
     
-    def cargar_foto(self):
-        """Cargar foto del miembro o mostrar placeholder"""
-        # Intentar cargar foto si existe
-        foto_path = self.miembro_data.get('foto')
-        
-        if foto_path and os.path.exists(foto_path):
-            pixmap = QPixmap(foto_path)
-            if not pixmap.isNull():
-                # Escalar manteniendo proporción
-                pixmap = pixmap.scaled(
-                    200, 200,
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation
-                )
-                # Crear imagen circular
-                pixmap = self.crear_imagen_circular(pixmap)
-                self.foto_label.setPixmap(pixmap)
-                return
-        
-        # Si no hay foto, mostrar placeholder
+    def cargar_foto_async(self):
+        """Cargar foto del miembro de forma asíncrona"""
+        # Primero mostrar placeholder
         self.mostrar_placeholder()
+        
+        # Crear un hilo para cargar la foto
+        foto_path = self.miembro_data.get('foto')
+        self.foto_thread = FotoLoaderThread(foto_path)
+        self.foto_thread.foto_loaded.connect(self.on_foto_loaded)
+        self.foto_thread.start()
+    
+    def on_foto_loaded(self, pixmap):
+        """Manejar la carga de la foto cuando el hilo termina"""
+        if pixmap and not pixmap.isNull():
+            # Escalar manteniendo proporción
+            pixmap = pixmap.scaled(
+                200, 200,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            # Crear imagen circular
+            pixmap = self.crear_imagen_circular(pixmap)
+            self.foto_label.setPixmap(pixmap)
     
     def crear_imagen_circular(self, pixmap):
         """Crear una imagen circular a partir de un pixmap"""
@@ -277,15 +343,81 @@ class AccesoMiembroDialog(QDialog):
     
     def confirmar_acceso(self):
         """Confirmar y registrar el acceso"""
-        logging.info(f"Acceso confirmado para miembro ID: {self.miembro_data['id_miembro']}")
+        logging.info(f"Acceso confirmado para miembro ID: {self.miembro_data.get('id_miembro')}")
         self.acceso_confirmado.emit(self.miembro_data)
-        self.accept()
+        self.close_with_animation()
+    
+    def close_with_animation(self):
+        """Cerrar el diálogo con animación"""
+        # Animación de salida
+        self.opacity_animation = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.opacity_animation.setDuration(300)
+        self.opacity_animation.setStartValue(1.0)
+        self.opacity_animation.setEndValue(0.0)
+        self.opacity_animation.setEasingCurve(QEasingCurve.InCubic)
+        self.opacity_animation.finished.connect(self.close)
+        self.opacity_animation.start()
+    
+    def showEvent(self, event):
+        """Evento cuando se muestra el diálogo"""
+        super().showEvent(event)
+        
+        # Iniciar animación de entrada
+        self.opacity_animation = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.opacity_animation.setDuration(400)
+        self.opacity_animation.setStartValue(0.0)
+        self.opacity_animation.setEndValue(1.0)
+        self.opacity_animation.setEasingCurve(QEasingCurve.OutCubic)
+        self.opacity_animation.start()
+        
+        # Actualizar hora cada segundo
+        self.update_timer = QTimer(self)
+        self.update_timer.timeout.connect(self.actualizar_hora)
+        self.update_timer.start(1000)
+    
+    def actualizar_hora(self):
+        """Actualizar la etiqueta de hora"""
+        self.hora_label.setText(datetime.now().strftime("%d/%m/%Y - %H:%M:%S"))
+    
+    def mousePressEvent(self, event):
+        """Iniciar arrastre cuando se presiona el mouse"""
+        if event.button() == Qt.LeftButton:
+            self.dragging = True
+            self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        """Mover la ventana mientras se arrastra"""
+        if self.dragging and event.buttons() == Qt.LeftButton:
+            self.move(event.globalPosition().toPoint() - self.drag_position)
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        """Terminar arrastre cuando se suelta el mouse"""
+        if event.button() == Qt.LeftButton:
+            self.dragging = False
+            event.accept()
+    
+    def closeEvent(self, event):
+        """Evento al cerrar el diálogo"""
+        # Detener hilo de carga de foto si está activo
+        if self.foto_thread and self.foto_thread.isRunning():
+            self.foto_thread.terminate()
+            self.foto_thread.wait()
+            
+        # Detener timer de actualización de hora
+        if hasattr(self, 'update_timer'):
+            self.update_timer.stop()
+            
+        super().closeEvent(event)
     
     def aplicar_estilos(self):
         """Aplicar estilos personalizados al diálogo"""
         self.setStyleSheet(f"""
-            QDialog {{
+            #dialogContainer {{
                 background-color: white;
+                border: 3px solid {WindowsPhoneTheme.PRIMARY_BLUE};
+                border-radius: 0px;
             }}
             
             #dialogHeader {{

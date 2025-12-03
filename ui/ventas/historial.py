@@ -29,9 +29,9 @@ class HistorialVentasWindow(QWidget):
     
     cerrar_solicitado = Signal()
     
-    def __init__(self, db_manager, supabase_service, user_data, parent=None):
+    def __init__(self, pg_manager, supabase_service, user_data, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
         
@@ -125,7 +125,29 @@ class HistorialVentasWindow(QWidget):
             fecha_desde = self.fecha_desde.date().toPython()
             fecha_hasta = self.fecha_hasta.date().toPython()
             
-            ventas = self.db_manager.get_sales_by_date_range(fecha_desde, fecha_hasta)
+            self.cargar_historial(fecha_desde, fecha_hasta)
+            
+        except Exception as e:
+            logging.error(f"Error buscando ventas: {e}")
+            show_warning_dialog(self, "Error", f"Error al buscar ventas: {e}")
+            
+    def cargar_historial(self, fecha_desde, fecha_hasta):
+        """Cargar historial de ventas desde la base de datos"""
+        try:
+            cursor = self.pg_manager.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    v.id_venta, 
+                    v.fecha, 
+                    v.total, 
+                    u.nombre_completo as usuario
+                FROM ventas v
+                JOIN usuarios u ON v.id_usuario = u.id_usuario
+                WHERE DATE(v.fecha) BETWEEN %s AND %s
+                ORDER BY v.fecha DESC
+            """, (fecha_desde, fecha_hasta))
+            
+            ventas = cursor.fetchall()
             
             self.history_table.setRowCount(len(ventas))
             
@@ -134,11 +156,11 @@ class HistorialVentasWindow(QWidget):
                 self.history_table.setItem(row, 0, QTableWidgetItem(str(venta['id_venta'])))
                 
                 # Fecha
-                fecha = venta['fecha_venta'].strftime("%d/%m/%Y") if isinstance(venta['fecha_venta'], datetime) else str(venta['fecha_venta'])
+                fecha = venta['fecha'].strftime("%d/%m/%Y") if isinstance(venta['fecha'], datetime) else str(venta['fecha'])
                 self.history_table.setItem(row, 1, QTableWidgetItem(fecha))
                 
                 # Hora
-                hora = venta['fecha_venta'].strftime("%H:%M") if isinstance(venta['fecha_venta'], datetime) else "N/A"
+                hora = venta['fecha'].strftime("%H:%M") if isinstance(venta['fecha'], datetime) else "N/A"
                 self.history_table.setItem(row, 2, QTableWidgetItem(hora))
                 
                 # Total
@@ -157,14 +179,161 @@ class HistorialVentasWindow(QWidget):
                 self.history_table.setCellWidget(row, 5, btn_detalles)
                 
         except Exception as e:
-            logging.error(f"Error buscando ventas: {e}")
-            show_warning_dialog(self, "Error", f"Error al buscar ventas: {e}")
+            logging.error(f"Error cargando historial de ventas: {e}")
+            show_warning_dialog(self, "Error", f"No se pudo cargar el historial: {e}")
             
     def ver_detalles(self, venta_id):
         """Ver detalles de una venta"""
-        # TODO: Implementar ventana de detalles de venta
-        show_info_dialog(self, "Detalles", f"Ver detalles de venta ID: {venta_id}")
+        try:
+            cursor = self.pg_manager.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    dv.codigo_interno,
+                    dv.tipo_producto,
+                    dv.cantidad,
+                    dv.precio_unitario,
+                    dv.subtotal_linea,
+                    dv.nombre_producto,
+                    dv.descripcion_producto
+                FROM detalles_venta dv
+                WHERE dv.id_venta = %s
+            """, (venta_id,))
+            
+            detalles = cursor.fetchall()
+            
+            if not detalles:
+                show_info_dialog(self, "Detalles", f"No se encontraron detalles para la venta ID: {venta_id}")
+                return
+                
+            # Crear mensaje con los detalles
+            mensaje = f"Detalles de la venta ID: {venta_id}\n\n"
+            mensaje += "Producto\t\tCantidad\tPrecio\tSubtotal\n"
+            mensaje += "------------------------------------------------\n"
+            
+            for detalle in detalles:
+                nombre = detalle['nombre_producto'][:20] + "..." if len(detalle['nombre_producto']) > 20 else detalle['nombre_producto']
+                mensaje += f"{nombre}\t{detalle['cantidad']}\t${detalle['precio_unitario']:.2f}\t${detalle['subtotal_linea']:.2f}\n"
+            
+            show_info_dialog(self, "Detalles de Venta", mensaje)
+            
+        except Exception as e:
+            logging.error(f"Error obteniendo detalles de venta: {e}")
+            show_warning_dialog(self, "Error", f"No se pudieron obtener los detalles: {e}")
         
     def exportar_datos(self):
         """Exportar datos a archivo"""
-        show_info_dialog(self, "Exportar", "Función de exportación por implementar")
+        try:
+            from datetime import datetime
+            import os
+            
+            # Verificar si openpyxl está disponible
+            try:
+                from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            except ImportError:
+                show_warning_dialog(
+                    self,
+                    "Biblioteca requerida",
+                    "Para exportar a Excel necesitas instalar openpyxl",
+                    detail="Ejecuta: pip install openpyxl"
+                )
+                return
+            
+            # Obtener rango de fechas
+            fecha_desde = self.fecha_desde.date().toPython()
+            fecha_hasta = self.fecha_hasta.date().toPython()
+            
+            # Obtener datos de ventas
+            cursor = self.pg_manager.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    v.id_venta, 
+                    v.fecha, 
+                    v.total, 
+                    u.nombre_completo as usuario
+                FROM ventas v
+                JOIN usuarios u ON v.id_usuario = u.id_usuario
+                WHERE DATE(v.fecha) BETWEEN %s AND %s
+                ORDER BY v.fecha DESC
+            """, (fecha_desde, fecha_hasta))
+            
+            ventas = cursor.fetchall()
+            
+            # Crear libro de Excel
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Historial de Ventas"
+            
+            # Estilos
+            header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+            header_font = Font(bold=True, color="FFFFFF", size=12)
+            header_alignment = Alignment(horizontal="center", vertical="center")
+            
+            border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+            
+            # Encabezados
+            headers = ["ID Venta", "Fecha", "Hora", "Total", "Usuario"]
+            
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = header_alignment
+                cell.border = border
+            
+            # Datos
+            for row, venta in enumerate(ventas, 2):
+                ws.cell(row=row, column=1, value=venta['id_venta']).border = border
+                
+                # Fecha
+                fecha = venta['fecha'].strftime("%d/%m/%Y") if isinstance(venta['fecha'], datetime) else str(venta['fecha'])
+                ws.cell(row=row, column=2, value=fecha).border = border
+                
+                # Hora
+                hora = venta['fecha'].strftime("%H:%M") if isinstance(venta['fecha'], datetime) else "N/A"
+                ws.cell(row=row, column=3, value=hora).border = border
+                
+                # Total
+                total_cell = ws.cell(row=row, column=4, value=venta['total'])
+                total_cell.number_format = '$#,##0.00'
+                total_cell.border = border
+                
+                # Usuario
+                ws.cell(row=row, column=5, value=venta.get('usuario', 'N/A')).border = border
+            
+            # Ajustar anchos de columna
+            ws.column_dimensions['A'].width = 12
+            ws.column_dimensions['B'].width = 15
+            ws.column_dimensions['C'].width = 10
+            ws.column_dimensions['D'].width = 15
+            ws.column_dimensions['E'].width = 25
+            
+            # Guardar archivo
+            fecha_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+            filename = os.path.join(desktop, f"historial_ventas_{fecha_str}.xlsx")
+            
+            wb.save(filename)
+            
+            show_info_dialog(
+                self,
+                "Exportación completada",
+                f"El historial de ventas ha sido exportado exitosamente",
+                detail=f"Archivo guardado en:\n{filename}"
+            )
+            
+            logging.info(f"Historial de ventas exportado: {filename}")
+            
+        except Exception as e:
+            logging.error(f"Error exportando datos: {e}")
+            show_warning_dialog(
+                self,
+                "Error al exportar",
+                "No se pudo exportar el historial de ventas",
+                detail=str(e)
+            )

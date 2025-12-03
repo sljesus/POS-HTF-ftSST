@@ -102,12 +102,12 @@ class MonitorEntradas(QObject):
     
     nueva_entrada_detectada = Signal(dict)  # Emite los datos de la entrada y del miembro
     
-    def __init__(self, db_manager, supabase_service=None, 
+    def __init__(self, postgres_manager, supabase_service=None, 
                  pg_host='localhost', pg_port=5432, pg_database='torniquete_db',
                  pg_user='postgres', pg_password='postgres', pg_channel='nueva_entrada_canal'):
         """
         Args:
-            db_manager: Instancia de DatabaseManager (para SQLite de ventas)
+            postgres_manager: Instancia de PostgresManager para manejar la base de datos
             supabase_service: Instancia de SupabaseService (para consultas adicionales)
             pg_host: Host del PostgreSQL del torniquete (default: localhost)
             pg_port: Puerto PostgreSQL (default: 5432)
@@ -117,7 +117,7 @@ class MonitorEntradas(QObject):
             pg_channel: Canal LISTEN/NOTIFY (default: nueva_entrada_canal)
         """
         super().__init__()
-        self.db_manager = db_manager
+        self.postgres_manager = postgres_manager
         self.supabase_service = supabase_service
         
         # Configuración PostgreSQL
@@ -198,13 +198,14 @@ class MonitorEntradas(QObject):
             if 'nombres' in datos and 'apellido_paterno' in datos:
                 self.nueva_entrada_detectada.emit(datos)
             else:
-                # Si solo trae ID, consultar Supabase para obtener datos completos
-                self.consultar_datos_completos(datos.get('id_entrada'), datos.get('id_miembro'))
-                
-        except json.JSONDecodeError as e:
-            logging.error(f"[ERROR] Error parseando JSON de notificacion: {e}")
+                # Obtener datos adicionales desde postgres_manager si faltan
+                entrada_id = datos.get('id_entrada')
+                if entrada_id:
+                    entrada_detalle = self.postgres_manager.get_entry_details(entrada_id)
+                    self.nueva_entrada_detectada.emit(entrada_detalle)
+        
         except Exception as e:
-            logging.error(f"[ERROR] Error procesando notificacion: {e}")
+            logging.error(f"[ERROR] Error procesando notificación: {e}")
     
     def consultar_datos_completos(self, id_entrada, id_miembro):
         """Consultar datos completos desde Supabase cuando la notificación solo trae IDs"""

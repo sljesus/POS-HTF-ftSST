@@ -9,7 +9,7 @@ import os
 # Agregar el directorio padre al path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.db_manager import DatabaseManager
+from database.postgres_manager import PostgresManager
 import logging
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -23,11 +23,10 @@ def verificar_sistema():
     
     try:
         # Inicializar base de datos
-        db_path = os.path.join(os.path.dirname(__file__), 'database', 'pos_htf.db')
-        db = DatabaseManager(db_path)
+        db = PostgresManager()
         db.initialize_database()
-        
-        cursor = db.connection.cursor()
+
+        cursor = db.get_cursor()
         
         # 1. Verificar tabla de miembros
         print("📋 1. MIEMBROS")
@@ -36,7 +35,7 @@ def verificar_sistema():
         cursor.execute("SELECT COUNT(*) FROM miembros")
         total_miembros = cursor.fetchone()[0]
         
-        cursor.execute("SELECT COUNT(*) FROM miembros WHERE activo = 1")
+        cursor.execute("SELECT COUNT(*) FROM miembros WHERE activo = TRUE")
         miembros_activos = cursor.fetchone()[0]
         
         print(f"   Total de miembros: {total_miembros}")
@@ -55,7 +54,7 @@ def verificar_sistema():
         cursor.execute("SELECT COUNT(*) FROM registro_entradas")
         total_entradas = cursor.fetchone()[0]
         
-        cursor.execute("SELECT COUNT(*) FROM registro_entradas WHERE DATE(fecha_entrada) = DATE('now')")
+        cursor.execute("SELECT COUNT(*) FROM registro_entradas WHERE DATE(fecha_entrada) = CURRENT_DATE")
         entradas_hoy = cursor.fetchone()[0]
         
         cursor.execute("SELECT MAX(id_entrada) FROM registro_entradas")
@@ -71,7 +70,8 @@ def verificar_sistema():
             print("\n📝 3. ÚLTIMAS ENTRADAS")
             print("-" * 70)
             
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT 
                     re.id_entrada,
                     re.fecha_entrada,
@@ -81,7 +81,8 @@ def verificar_sistema():
                 INNER JOIN miembros m ON re.id_miembro = m.id_miembro
                 ORDER BY re.fecha_entrada DESC
                 LIMIT 3
-            """)
+                """
+            )
             
             entradas = cursor.fetchall()
             

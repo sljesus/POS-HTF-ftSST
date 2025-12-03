@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QGraphicsOpacityEffect, QWidget
 )
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, Signal
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, Signal, QThread
 from PySide6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor, QCursor
 import logging
 from datetime import datetime
@@ -42,6 +42,7 @@ class NotificacionEntradaWidget(QDialog):
         self.dragging = False
         self.drag_position = None
         
+        # Configuración de ventana
         self.setWindowTitle("Acceso Registrado")
         self.setModal(False)  # No bloquea la ventana principal
         self.setWindowFlags(
@@ -53,9 +54,18 @@ class NotificacionEntradaWidget(QDialog):
         
         self.setFixedSize(600, 700)
         
+        # Inicializar componentes antes de aplicar estilos
         self.setup_ui()
         self.aplicar_estilos()
         
+        # Configurar timers después de inicializar componentes
+        self.setup_timers()
+        
+        # Configurar efectos de animación
+        self.setup_animations()
+        
+    def setup_timers(self):
+        """Configurar los timers para actualización y cierre automático"""
         # Timer para cerrar automáticamente
         self.auto_close_timer = QTimer(self)
         self.auto_close_timer.timeout.connect(self.cerrar_con_animacion)
@@ -64,6 +74,8 @@ class NotificacionEntradaWidget(QDialog):
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.actualizar_tiempo)
         
+    def setup_animations(self):
+        """Configurar las animaciones del widget"""
         # Efecto de opacidad para animaciones
         self.opacity_effect = QGraphicsOpacityEffect()
         self.setGraphicsEffect(self.opacity_effect)
@@ -87,10 +99,22 @@ class NotificacionEntradaWidget(QDialog):
         container_layout.setSpacing(0)
         
         # ===== ENCABEZADO =====
+        header = self.create_header()
+        container_layout.addWidget(header)
+        
+        # ===== CONTENIDO =====
+        content = self.create_content()
+        container_layout.addWidget(content)
+        
+        main_layout.addWidget(container)
+        
+    def create_header(self):
+        """Crear el encabezado de la notificación"""
         header = QFrame()
         header.setObjectName("notificacionHeader")
         header.setFixedHeight(100)
         header.setCursor(QCursor(Qt.OpenHandCursor))  # Cursor para indicar que se puede arrastrar
+        
         header_layout = QVBoxLayout(header)
         header_layout.setContentsMargins(
             WindowsPhoneTheme.MARGIN_MEDIUM,
@@ -112,9 +136,10 @@ class NotificacionEntradaWidget(QDialog):
         self.hora_label.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(self.hora_label)
         
-        container_layout.addWidget(header)
+        return header
         
-        # ===== CONTENIDO =====
+    def create_content(self):
+        """Crear el contenido principal de la notificación"""
         content = QWidget()
         content.setObjectName("notificacionContent")
         content_layout = QVBoxLayout(content)
@@ -135,7 +160,8 @@ class NotificacionEntradaWidget(QDialog):
         self.foto_label.setAlignment(Qt.AlignCenter)
         self.foto_label.setObjectName("fotoMiembro")
         
-        self.cargar_foto()
+        # Cargar foto de forma asíncrona para no bloquear la UI
+        self.cargar_foto_async()
         
         foto_layout.addWidget(self.foto_label)
         content_layout.addLayout(foto_layout)
@@ -150,6 +176,20 @@ class NotificacionEntradaWidget(QDialog):
         content_layout.addWidget(nombre_label)
         
         # ===== INFORMACIÓN ADICIONAL =====
+        info_container = self.create_info_container()
+        content_layout.addWidget(info_container)
+        
+        # Espaciador
+        content_layout.addStretch()
+        
+        # ===== BOTONES DE ACCIÓN =====
+        btn_layout = self.create_buttons_layout()
+        content_layout.addLayout(btn_layout)
+        
+        return content
+        
+    def create_info_container(self):
+        """Crear el contenedor con información adicional del miembro"""
         info_container = QFrame()
         info_container.setObjectName("infoContainer")
         info_layout = QVBoxLayout(info_container)
@@ -172,12 +212,10 @@ class NotificacionEntradaWidget(QDialog):
         telefono = self.miembro_data.get('telefono', 'No registrado')
         self.agregar_info_row(info_layout, "Teléfono:", telefono)
         
-        content_layout.addWidget(info_container)
+        return info_container
         
-        # Espaciador
-        content_layout.addStretch()
-        
-        # ===== BOTONES DE ACCIÓN =====
+    def create_buttons_layout(self):
+        """Crear el layout con los botones de acción"""
         btn_layout = QHBoxLayout()
         btn_layout.setContentsMargins(0, WindowsPhoneTheme.MARGIN_SMALL, 0, 0)
         btn_layout.setSpacing(WindowsPhoneTheme.MARGIN_SMALL)
@@ -200,10 +238,7 @@ class NotificacionEntradaWidget(QDialog):
         btn_cerrar.clicked.connect(self.cerrar_con_animacion)
         btn_layout.addWidget(btn_cerrar)
         
-        content_layout.addLayout(btn_layout)
-        
-        container_layout.addWidget(content)
-        main_layout.addWidget(container)
+        return btn_layout
     
     def agregar_info_row(self, layout, etiqueta, valor):
         """Agregar una fila de información"""
@@ -226,19 +261,22 @@ class NotificacionEntradaWidget(QDialog):
         
         layout.addLayout(row)
     
-    def cargar_foto(self):
-        """Cargar foto del miembro o mostrar placeholder"""
-        foto_path = self.miembro_data.get('foto')
-        
-        if foto_path and os.path.exists(foto_path):
-            pixmap = QPixmap(foto_path)
-            if not pixmap.isNull():
-                pixmap = pixmap.scaled(180, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                pixmap = self.crear_imagen_circular(pixmap)
-                self.foto_label.setPixmap(pixmap)
-                return
-        
+    def cargar_foto_async(self):
+        """Cargar foto del miembro de forma asíncrona para no bloquear la UI"""
+        # Primero mostrar placeholder
         self.mostrar_placeholder()
+        
+        # Crear un hilo para cargar la foto
+        self.foto_thread = FotoThread(self.miembro_data.get('foto'))
+        self.foto_thread.foto_loaded.connect(self.on_foto_loaded)
+        self.foto_thread.start()
+    
+    def on_foto_loaded(self, pixmap):
+        """Manejar la carga de la foto cuando el hilo termina"""
+        if pixmap and not pixmap.isNull():
+            pixmap = pixmap.scaled(180, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            pixmap = self.crear_imagen_circular(pixmap)
+            self.foto_label.setPixmap(pixmap)
     
     def crear_imagen_circular(self, pixmap):
         """Crear una imagen circular a partir de un pixmap"""
@@ -326,6 +364,11 @@ class NotificacionEntradaWidget(QDialog):
         self.auto_close_timer.stop()
         self.update_timer.stop()
         
+        # Detener hilo de carga de foto si está activo
+        if hasattr(self, 'foto_thread') and self.foto_thread.isRunning():
+            self.foto_thread.terminate()
+            self.foto_thread.wait()
+        
         # Animación de salida
         self.opacity_animation = QPropertyAnimation(self.opacity_effect, b"opacity")
         self.opacity_animation.setDuration(300)
@@ -368,6 +411,11 @@ class NotificacionEntradaWidget(QDialog):
     
     def closeEvent(self, event):
         """Evento al cerrar el widget"""
+        # Asegurarse de detener todos los hilos y timers
+        if hasattr(self, 'foto_thread') and self.foto_thread.isRunning():
+            self.foto_thread.terminate()
+            self.foto_thread.wait()
+            
         self.cerrado.emit()
         super().closeEvent(event)
     
@@ -438,3 +486,23 @@ class NotificacionEntradaWidget(QDialog):
                 background-color: #003d82;
             }}
         """)
+
+
+class FotoThread(QThread):
+    """Hilo para cargar la foto del miembro de forma asíncrona"""
+    foto_loaded = Signal(QPixmap)
+    
+    def __init__(self, foto_path):
+        super().__init__()
+        self.foto_path = foto_path
+    
+    def run(self):
+        """Cargar la foto en un hilo separado"""
+        if self.foto_path and os.path.exists(self.foto_path):
+            pixmap = QPixmap(self.foto_path)
+            if not pixmap.isNull():
+                self.foto_loaded.emit(pixmap)
+                return
+        
+        # Si no hay foto o hay error, emitir None
+        self.foto_loaded.emit(None)

@@ -32,9 +32,9 @@ class InventarioWindow(QWidget):
     
     cerrar_solicitado = Signal()
     
-    def __init__(self, db_manager, supabase_service, user_data, parent=None):
+    def __init__(self, postgres_manager, supabase_service, user_data, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.pg_manager = postgres_manager  # Cambiado de db_manager a pg_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
         self.productos_data = []
@@ -297,9 +297,7 @@ class InventarioWindow(QWidget):
         """Cargar datos de inventario desde la base de datos"""
         try:
             logging.info("Cargando inventario completo...")
-            
-            # Consultar inventario con datos de productos
-            cursor = self.db_manager.connection.cursor()
+            cursor = self.pg_manager.connection.cursor()
             cursor.execute("""
                 SELECT 
                     i.codigo_interno,
@@ -318,10 +316,8 @@ class InventarioWindow(QWidget):
                 ORDER BY i.codigo_interno
             """)
             
-            # Convertir a lista de diccionarios
-            columns = [description[0] for description in cursor.description]
-            rows = cursor.fetchall()
-            self.productos_data = [dict(zip(columns, row)) for row in rows]
+            # Obtener datos (RealDictCursor ya devuelve diccionarios)
+            self.productos_data = cursor.fetchall()
             
             # Poblar combo de categorías
             categorias = sorted(set(p['categoria'] for p in self.productos_data if p['categoria']))
@@ -365,7 +361,8 @@ class InventarioWindow(QWidget):
             self.inventory_table.setItem(row, 2, QTableWidgetItem(producto['categoria']))
             
             # Precio
-            precio_item = QTableWidgetItem(f"${producto['precio']:.2f}")
+            precio = float(producto['precio']) if producto['precio'] is not None else 0.0
+            precio_item = QTableWidgetItem(f"${precio:.2f}")
             precio_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.inventory_table.setItem(row, 3, precio_item)
             

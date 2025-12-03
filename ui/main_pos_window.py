@@ -46,10 +46,15 @@ from ui.movimiento_inventario_window import MovimientoInventarioWindow
 from ui.nuevo_producto_window import NuevoProductoWindow
 from ui.historial_movimientos_window import HistorialMovimientosWindow
 from ui.historial_acceso_window import HistorialAccesoWindow
+from ui.historial_turnos_window import HistorialTurnosWindow
+from ui.asignacion_turnos_window import AsignacionTurnosWindow
+from ui.ubicaciones_window import UbicacionesWindow
+from ui.dias_festivos_window import DiasFestvosWindow
 from ui.buscar_miembro_window import BuscarMiembroWindow
 from ui.dias_festivos_window import DiasFestvosWindow
 from ui.notificacion_entrada_widget import NotificacionEntradaWidget
 from utils.monitor_entradas import MonitorEntradas
+from database.postgres_manager import PostgresManager
 
 
 class MainPOSWindow(QMainWindow):
@@ -57,11 +62,11 @@ class MainPOSWindow(QMainWindow):
     
     logout_requested = Signal()
     
-    def __init__(self, user_data, db_manager, supabase_service):
+    def __init__(self, user_data, pg_manager, supabase_service):
         super().__init__()
-        self.user_data = user_data
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.supabase_service = supabase_service
+        self.user_data = user_data
         
         self.setWindowTitle("HTF Gimnasio - Sistema POS")
         self.setGeometry(100, 50, 1400, 900)
@@ -311,10 +316,22 @@ class MainPOSWindow(QMainWindow):
             btn_dias_festivos.clicked.connect(self.abrir_dias_festivos)
             admin_grid.addWidget(btn_dias_festivos, 0, 1)
             
+            btn_historial_turnos = TileButton("Historial de Turnos", "fa5s.cash-register", WindowsPhoneTheme.TILE_TEAL)
+            btn_historial_turnos.clicked.connect(self.abrir_historial_turnos)
+            admin_grid.addWidget(btn_historial_turnos, 0, 2)
+            
+            btn_asignar_turnos = TileButton("Asignar Turnos", "fa5s.calendar-check", WindowsPhoneTheme.TILE_ORANGE)
+            btn_asignar_turnos.clicked.connect(self.abrir_asignacion_turnos)
+            admin_grid.addWidget(btn_asignar_turnos, 1, 0)
+            
+            btn_ubicaciones = TileButton("Gestionar Ubicaciones", "fa5s.warehouse", WindowsPhoneTheme.TILE_BLUE)
+            btn_ubicaciones.clicked.connect(self.abrir_gestion_ubicaciones)
+            admin_grid.addWidget(btn_ubicaciones, 1, 1)
+            
             # Aquí se pueden agregar más botones de administración en el futuro
             # Ejemplo:
             # btn_reportes = TileButton("Reportes", "fa5s.chart-bar", WindowsPhoneTheme.TILE_ORANGE)
-            # admin_grid.addWidget(btn_reportes, 0, 2)
+            # admin_grid.addWidget(btn_reportes, 1, 2)
         else:
             # Si no es administrador, mostrar mensaje
             no_access_label = StyledLabel(
@@ -376,7 +393,7 @@ class MainPOSWindow(QMainWindow):
             
             # Crear widget de nueva venta
             nueva_venta_widget = NuevaVentaWindow(
-                self.db_manager, 
+                self.pg_manager, 
                 self.supabase_service, 
                 self.user_data, 
                 self
@@ -406,7 +423,7 @@ class MainPOSWindow(QMainWindow):
             
             # Crear widget de ventas del día
             ventas_dia_widget = VentasDiaWindow(
-                self.db_manager, 
+                self.pg_manager, 
                 self.supabase_service, 
                 self.user_data, 
                 self
@@ -435,7 +452,7 @@ class MainPOSWindow(QMainWindow):
             
             # Crear widget de historial
             historial_widget = HistorialVentasWindow(
-                self.db_manager, 
+                self.pg_manager, 
                 self.supabase_service, 
                 self.user_data, 
                 self
@@ -464,7 +481,7 @@ class MainPOSWindow(QMainWindow):
             
             # Crear widget de cierre de caja
             cierre_widget = CierreCajaWindow(
-                self.db_manager, 
+                self.pg_manager, 
                 self.supabase_service, 
                 self.user_data, 
                 self
@@ -518,7 +535,7 @@ class MainPOSWindow(QMainWindow):
         """Remover un widget temporal del stack"""
         try:
             index = self.stacked_widget.indexOf(widget)
-            if index > 3:  # Solo remover widgets temporales (después de las 4 páginas principales)
+            if index > 4:  # Solo remover widgets temporales (después de las 5 páginas principales)
                 self.stacked_widget.removeWidget(widget)
                 widget.deleteLater()
         except Exception as e:
@@ -540,7 +557,7 @@ class MainPOSWindow(QMainWindow):
             
             # Crear widget de personal
             personal_widget = PersonalWindow(
-                self.db_manager,
+                self.pg_manager,
                 self.supabase_service
             )
             
@@ -580,6 +597,78 @@ class MainPOSWindow(QMainWindow):
         except Exception as e:
             logging.error(f"Error abriendo gestión de días festivos: {e}")
     
+    def abrir_historial_turnos(self):
+        """Abrir widget de historial de turnos de caja"""
+        try:
+            # Actualizar título de la barra superior
+            self.top_bar.set_title("HISTORIAL DE TURNOS")
+            
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Crear widget de historial de turnos
+            turnos_widget = HistorialTurnosWindow(self.pg_manager, self.user_data)
+            
+            # Conectar señal de cierre
+            turnos_widget.cerrar_solicitado.connect(self.volver_a_administracion)
+            
+            # Agregar al stack y mostrar
+            self.stacked_widget.addWidget(turnos_widget)
+            self.stacked_widget.setCurrentWidget(turnos_widget)
+            
+            logging.info("Abriendo historial de turnos")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo historial de turnos: {e}")
+    
+    def abrir_asignacion_turnos(self):
+        """Abrir widget de asignación de turnos"""
+        try:
+            # Actualizar título de la barra superior
+            self.top_bar.set_title("ASIGNACIÓN DE TURNOS")
+            
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Crear widget de asignación de turnos
+            asignacion_widget = AsignacionTurnosWindow(self.pg_manager, self.user_data)
+            
+            # Conectar señal de cierre
+            asignacion_widget.cerrar_solicitado.connect(self.volver_a_administracion)
+            
+            # Agregar al stack y mostrar
+            self.stacked_widget.addWidget(asignacion_widget)
+            self.stacked_widget.setCurrentWidget(asignacion_widget)
+            
+            logging.info("Abriendo asignación de turnos")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo asignación de turnos: {e}")
+    
+    def abrir_gestion_ubicaciones(self):
+        """Abrir widget de gestión de ubicaciones"""
+        try:
+            # Actualizar título de la barra superior
+            self.top_bar.set_title("GESTIÓN DE UBICACIONES")
+            
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Crear widget de ubicaciones
+            ubicaciones_widget = UbicacionesWindow(self.pg_manager, self.user_data)
+            
+            # Conectar señal de cierre
+            ubicaciones_widget.cerrar_solicitado.connect(self.volver_a_administracion)
+            
+            # Agregar al stack y mostrar
+            self.stacked_widget.addWidget(ubicaciones_widget)
+            self.stacked_widget.setCurrentWidget(ubicaciones_widget)
+            
+            logging.info("Abriendo gestión de ubicaciones")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo gestión de ubicaciones: {e}")
+    
     def volver_a_administracion(self):
         """Volver a la página de administración"""
         # Restaurar título
@@ -612,7 +701,7 @@ class MainPOSWindow(QMainWindow):
             self.nav_bar.hide()
 
             nuevo_producto_widget = NuevoProductoWindow(
-                self.db_manager,
+                self.pg_manager,
                 self.supabase_service,
                 self.user_data,
                 self
@@ -636,7 +725,7 @@ class MainPOSWindow(QMainWindow):
             
             # Crear ventana de inventario
             inventario_window = InventarioWindow(
-                self.db_manager,
+                self.pg_manager,
                 self.supabase_service,
                 self.user_data,
                 self
@@ -669,7 +758,7 @@ class MainPOSWindow(QMainWindow):
             # Crear ventana de registro de entrada
             entrada_window = MovimientoInventarioWindow(
                 "entrada",
-                self.db_manager,
+                self.pg_manager,
                 self.supabase_service,
                 self.user_data,
                 self
@@ -703,7 +792,7 @@ class MainPOSWindow(QMainWindow):
             # Crear ventana de registro de salida
             salida_window = MovimientoInventarioWindow(
                 "salida",
-                self.db_manager,
+                self.pg_manager,
                 self.supabase_service,
                 self.user_data,
                 self
@@ -769,7 +858,7 @@ class MainPOSWindow(QMainWindow):
         try:
             # Crear ventana de historial
             historial_window = HistorialMovimientosWindow(
-                self.db_manager,
+                self.pg_manager,
                 self.supabase_service,
                 self.user_data,
                 parent=self
@@ -798,7 +887,7 @@ class MainPOSWindow(QMainWindow):
         try:
             # Crear ventana de historial de acceso
             historial_window = HistorialAccesoWindow(
-                self.db_manager,
+                self.pg_manager,
                 self.supabase_service,
                 self.user_data,
                 parent=self
@@ -827,7 +916,7 @@ class MainPOSWindow(QMainWindow):
         try:
             # Crear ventana de búsqueda
             buscar_window = BuscarMiembroWindow(
-                self.db_manager,
+                self.pg_manager,
                 self.supabase_service,
                 self.user_data,
                 parent=self
@@ -881,7 +970,7 @@ class MainPOSWindow(QMainWindow):
         try:
             # Crear monitor con PostgreSQL LISTEN/NOTIFY
             self.monitor_entradas = MonitorEntradas(
-                self.db_manager,
+                self.pg_manager,
                 supabase_service=self.supabase_service,
                 pg_host='localhost',  # Cambiar a IP de la mini PC del torniquete
                 pg_port=5432,
@@ -979,5 +1068,3 @@ class MainPOSWindow(QMainWindow):
             logging.error(f"Error en closeEvent: {e}")
         finally:
             super().closeEvent(event)
-
-

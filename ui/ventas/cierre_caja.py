@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QDoubleValidator
 import logging
-from datetime import date
+from datetime import date, datetime, time, timedelta
 
 # Importar componentes del sistema de diseño
 from ui.components import (
@@ -26,6 +26,7 @@ from ui.components import (
     show_error_dialog,
     show_confirmation_dialog
 )
+from database.postgres_manager import PostgresManager
 
 
 class CierreCajaWindow(QWidget):
@@ -33,16 +34,83 @@ class CierreCajaWindow(QWidget):
     
     cerrar_solicitado = Signal()
     
-    def __init__(self, db_manager, supabase_service, user_data, parent=None):
+    def __init__(self, pg_manager, supabase_service, user_data, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
+        self.turno_abierto = None
         
         # Configurar política de tamaño
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
-        self.setup_ui()
+        # Verificar si hay turno abierto antes de mostrar UI
+        if not self.verificar_turno_abierto():
+            self.mostrar_sin_turno()
+        else:
+            self.setup_ui()
+    
+    def verificar_turno_abierto(self):
+        """Verificar si el usuario tiene un turno abierto"""
+        try:
+            with self.pg_manager.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id_turno, monto_inicial, fecha_apertura
+                    FROM turnos_caja 
+                    WHERE id_usuario = %s AND cerrado = FALSE
+                    ORDER BY fecha_apertura DESC
+                    LIMIT 1
+                """, (self.user_data['id_usuario'],))
+                
+                self.turno_abierto = cursor.fetchone()
+                return self.turno_abierto is not None
+                
+        except Exception as e:
+            logging.error(f"Error verificando turno abierto: {e}")
+            return False
+    
+    def mostrar_sin_turno(self):
+        """Mostrar mensaje cuando no hay turno abierto"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(WindowsPhoneTheme.MARGIN_LARGE,
+                                 WindowsPhoneTheme.MARGIN_LARGE,
+                                 WindowsPhoneTheme.MARGIN_LARGE,
+                                 WindowsPhoneTheme.MARGIN_LARGE)
+        layout.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
+        
+        # Panel de información
+        info_panel = ContentPanel()
+        info_layout = QVBoxLayout(info_panel)
+        info_layout.setContentsMargins(40, 40, 40, 40)
+        info_layout.setSpacing(20)
+        
+        # Icono y título
+        title = StyledLabel(
+            "NO HAY TURNO ABIERTO",
+            bold=True,
+            size=WindowsPhoneTheme.FONT_SIZE_TITLE
+        )
+        title.setAlignment(Qt.AlignCenter)
+        info_layout.addWidget(title)
+        
+        # Mensaje
+        mensaje = StyledLabel(
+            "No tienes un turno abierto actualmente.\n\n"
+            "Para cerrar caja primero debes tener un turno activo.\n"
+            "Contacta al administrador para que te asigne un turno.",
+            size=WindowsPhoneTheme.FONT_SIZE_NORMAL
+        )
+        mensaje.setAlignment(Qt.AlignCenter)
+        mensaje.setWordWrap(True)
+        info_layout.addWidget(mensaje)
+        
+        layout.addWidget(info_panel)
+        layout.addStretch()
+        
+        # Botón volver
+        btn_volver = TileButton("Volver", "fa5s.arrow-left", WindowsPhoneTheme.TILE_BLUE)
+        btn_volver.clicked.connect(self.cerrar_solicitado.emit)
+        layout.addWidget(btn_volver)
         
     def setup_ui(self):
         """Configurar interfaz de cierre de caja"""
@@ -161,10 +229,23 @@ class CierreCajaWindow(QWidget):
     def cargar_resumen(self):
         """Cargar resumen del día"""
         try:
-            # Obtener ventas del día
-            ventas = self.db_manager.get_sales_by_date(date.today())
+            # Obtener ventas del día usando postgres_manager
+            cursor = self.pg_manager.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    v.id_venta, 
+                    v.fecha, 
+                    v.total, 
+                    u.nombre_completo as usuario
+                FROM ventas v
+                JOIN usuarios u ON v.id_usuario = u.id_usuario
+                WHERE DATE(v.fecha) = CURRENT_DATE
+                ORDER BY v.fecha DESC
+            """)
             
-            total_esperado = sum(venta['total'] for venta in ventas)
+            ventas = cursor.fetchall()
+            
+            total_esperado = sum(float(venta['total']) for venta in ventas)
             num_ventas = len(ventas)
             
             # Actualizar widgets
@@ -216,6 +297,94 @@ class CierreCajaWindow(QWidget):
             self.total_contado.setText("$0.00")
             self.total_contado_valor = 0.0
             self.diferencia_label.setText("Diferencia: $0.00")
+    
+    def verificar_horario_turno(self):
+        """Verificar si el cierre está dentro del horario esperado del turno
+        
+        Returns:
+            tuple: (requiere_autorizacion: bool, motivo: str)
+        """
+        try:
+            if not self.turno_abierto:
+                return False, ""
+            
+            # Obtener hora de apertura del turno
+            fecha_apertura = self.turno_abierto['fecha_apertura']
+            hora_apertura = fecha_apertura.time()
+            
+            # Calcular hora esperada de cierre según el turno
+            # Turno matutino: 06:00 - 14:00
+            # Turno vespertino: 14:00 - 22:00
+            
+            hora_actual = datetime.now().time()
+            
+            # Determinar tipo de turno basado en hora de apertura
+            if time(5, 0) <= hora_apertura < time(13, 0):
+                # Turno matutino
+                hora_inicio_esperada = time(6, 0)
+                hora_fin_esperada = time(14, 0)
+                nombre_turno = "Matutino (06:00 - 14:00)"
+            elif time(13, 0) <= hora_apertura < time(21, 0):
+                # Turno vespertino
+                hora_inicio_esperada = time(14, 0)
+                hora_fin_esperada = time(22, 0)
+                nombre_turno = "Vespertino (14:00 - 22:00)"
+            else:
+                # Turno fuera de horario estándar, requiere autorización siempre
+                return True, f"Cierre de turno fuera de horario estándar\n\nTurno iniciado a las {hora_apertura.strftime('%H:%M')}"
+            
+            # Margen de tolerancia: 30 minutos antes o después
+            margen = timedelta(minutes=30)
+            
+            # Convertir a datetime para comparar
+            ahora = datetime.now()
+            fecha_hoy = ahora.date()
+            
+            hora_fin_datetime = datetime.combine(fecha_hoy, hora_fin_esperada)
+            hora_cierre_min = hora_fin_datetime - margen
+            hora_cierre_max = hora_fin_datetime + margen
+            
+            # Verificar si está fuera del rango
+            if ahora < hora_cierre_min:
+                # Cerrando muy temprano
+                diferencia = hora_cierre_min - ahora
+                minutos = int(diferencia.total_seconds() / 60)
+                return True, (
+                    f"Cierre anticipado de turno {nombre_turno}\n\n"
+                    f"Hora esperada de cierre: {hora_fin_esperada.strftime('%H:%M')}\n"
+                    f"Hora actual: {hora_actual.strftime('%H:%M')}\n"
+                    f"Se está cerrando {minutos} minutos antes de lo esperado"
+                )
+            elif ahora > hora_cierre_max:
+                # Cerrando muy tarde
+                diferencia = ahora - hora_cierre_max
+                minutos = int(diferencia.total_seconds() / 60)
+                
+                # Mostrar advertencia pero no requiere autorización si es menos de 2 horas
+                if minutos < 120:
+                    show_warning_dialog(
+                        self,
+                        "Recordatorio",
+                        f"⚠️ El turno {nombre_turno} debía cerrar a las {hora_fin_esperada.strftime('%H:%M')}\n\n"
+                        f"Recuerda cerrar el turno puntualmente al finalizar tu horario."
+                    )
+                    return False, ""
+                else:
+                    # Más de 2 horas de retraso requiere autorización
+                    return True, (
+                        f"Cierre tardío de turno {nombre_turno}\n\n"
+                        f"Hora esperada de cierre: {hora_fin_esperada.strftime('%H:%M')}\n"
+                        f"Hora actual: {hora_actual.strftime('%H:%M')}\n"
+                        f"Se está cerrando {minutos} minutos después de lo esperado"
+                    )
+            
+            # Está dentro del rango aceptable
+            return False, ""
+            
+        except Exception as e:
+            logging.error(f"Error verificando horario de turno: {e}")
+            # En caso de error, permitir el cierre sin autorización
+            return False, ""
         
     def procesar_cierre(self):
         """Procesar cierre de caja"""
@@ -242,8 +411,30 @@ class CierreCajaWindow(QWidget):
                 "Por favor ingrese un valor numérico válido para el efectivo."
             )
             return
+        
+        # Verificar si está dentro del horario del turno
+        autorizacion_requerida, motivo = self.verificar_horario_turno()
+        
+        if autorizacion_requerida:
+            # Solicitar autorización de administrador
+            from ui.admin_auth_dialog import AdminAuthDialog
+            dialog = AdminAuthDialog(self.pg_manager, motivo, self)
             
-        diferencia = self.total_contado_valor - self.total_esperado_valor
+            if dialog.exec() != dialog.Accepted:
+                # Autorización cancelada o denegada
+                return
+            
+            # Obtener datos de autorización
+            auth_data = dialog.get_autorizacion()
+            if not auth_data['autorizado']:
+                return
+            
+            # Guardar datos de autorización para el registro
+            self.autorizacion = auth_data
+        else:
+            self.autorizacion = None
+        
+        diferencia = float(self.total_contado_valor) - float(self.total_esperado_valor)
         
         # Confirmar cierre
         resumen = (
@@ -273,13 +464,12 @@ class CierreCajaWindow(QWidget):
                     'total_esperado': self.total_esperado_valor,
                     'total_contado': self.total_contado_valor,
                     'diferencia': diferencia,
-                    'id_usuario': self.user_data['id'],
+                    'id_usuario': self.user_data['id_usuario'],
                     'efectivo': efectivo,
                     'notas': notas
                 }
                 
-                # TODO: Implementar método en db_manager para registrar cierre
-                # self.db_manager.register_cash_closing(cierre_data)
+                self.registrar_cierre(cierre_data)
                 
                 show_success_dialog(self, "Cierre Completado", "Cierre de caja registrado exitosamente.")
                 self.cerrar_solicitado.emit()
@@ -287,3 +477,48 @@ class CierreCajaWindow(QWidget):
             except Exception as e:
                 logging.error(f"Error procesando cierre: {e}")
                 show_error_dialog(self, "Error", f"Error al procesar cierre: {e}")
+                
+    def registrar_cierre(self, cierre_data):
+        try:
+            with self.pg_manager.connection.cursor() as cursor:
+                # Usar el turno que ya verificamos que está abierto
+                if not self.turno_abierto:
+                    raise Exception("No hay turno abierto para cerrar")
+                
+                # Preparar notas incluyendo autorización si existe
+                notas_cierre = cierre_data.get('notas', '')
+                if self.autorizacion:
+                    auth_info = (
+                        f"\n\n--- AUTORIZACIÓN ADMINISTRADOR ---\n"
+                        f"Autorizado por: {self.autorizacion['nombre_admin']}\n"
+                        f"Justificación: {self.autorizacion['justificacion']}"
+                    )
+                    notas_cierre = (notas_cierre + auth_info) if notas_cierre else auth_info.strip()
+                
+                # Actualizar turno existente
+                cursor.execute("""
+                    UPDATE turnos_caja 
+                    SET fecha_cierre = CURRENT_TIMESTAMP,
+                        total_ventas_efectivo = %s,
+                        monto_esperado = %s,
+                        monto_real_cierre = %s,
+                        diferencia = %s,
+                        cerrado = TRUE,
+                        notas_apertura = COALESCE(notas_apertura, '') || %s
+                    WHERE id_turno = %s
+                """, (
+                    cierre_data['total_esperado'],
+                    float(self.turno_abierto['monto_inicial']) + cierre_data['total_esperado'],
+                    cierre_data['total_contado'],
+                    cierre_data['diferencia'],
+                    '\n' + notas_cierre if self.turno_abierto.get('notas_apertura') else notas_cierre,
+                    self.turno_abierto['id_turno']
+                ))
+                
+                self.pg_manager.connection.commit()
+                logging.info("Cierre de caja registrado correctamente")
+                
+        except Exception as e:
+            self.pg_manager.connection.rollback()
+            logging.error(f"Error registrando cierre de caja: {e}")
+            raise

@@ -40,13 +40,13 @@ class NuevaVentaWindow(QWidget):
     venta_completada = Signal(dict)
     cerrar_solicitado = Signal()
     
-    def __init__(self, db_manager, supabase_service, user_data, parent=None):
+    def __init__(self, pg_manager, supabase_service, user_data, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
-        
-        # Configurar política de tamaño
+        self.codigo = ""  # Initialize 'codigo' as an empty string
+        self.texto = ""   # Initialize 'texto' as an empty string
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         # Variables de venta
@@ -79,7 +79,7 @@ class NuevaVentaWindow(QWidget):
     def _build_products_panel(self):
         """Construir panel con buscador, catálogo y total."""
         panel = ContentPanel()
-        panel.setMinimumWidth(600)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(WindowsPhoneTheme.MARGIN_SMALL,
@@ -107,10 +107,10 @@ class NuevaVentaWindow(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.Fixed)
-        header.resizeSection(4, 50)  # Ancho de columna de acción
+        header.resizeSection(4, 80)  # Ancho de columna de acción
 
         self.productos_table.verticalHeader().setVisible(False)
-        self.productos_table.verticalHeader().setDefaultSectionSize(40)  # Altura de fila
+        self.productos_table.verticalHeader().setDefaultSectionSize(50)  # Altura de fila para mostrar botón completo
         self.productos_table.setSelectionMode(QTableWidget.NoSelection)
         self.productos_table.setFocusPolicy(Qt.NoFocus)
         self.productos_table.setAlternatingRowColors(True)
@@ -162,7 +162,8 @@ class NuevaVentaWindow(QWidget):
         header = self.carrito_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Fixed)
+        header.resizeSection(2, 100)  # Ancho fijo para columna de cantidad
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.Fixed)
         header.resizeSection(4, 56)
@@ -177,6 +178,7 @@ class NuevaVentaWindow(QWidget):
             """
             QTableView::item:hover {
                 background-color: rgba(30, 58, 138, 0.08);
+                color: black;
             }
             QTableView::item:selected {
                 background-color: rgba(30, 58, 138, 0.15);
@@ -248,7 +250,6 @@ class NuevaVentaWindow(QWidget):
         btn = QPushButton()
         btn.setCursor(QCursor(Qt.PointingHandCursor))
         btn.setToolTip("Agregar al carrito")
-        btn.setFixedSize(28, 28)  # Botón más compacto
         btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {WindowsPhoneTheme.TILE_GREEN};
@@ -262,13 +263,6 @@ class NuevaVentaWindow(QWidget):
                 background-color: {WindowsPhoneTheme.TILE_TEAL};
             }}
         """)
-
-        try:
-            import qtawesome as qta
-            btn.setIcon(qta.icon('fa5s.plus', color='white'))
-            btn.setIconSize(QSize(12, 12))  # Icono más pequeño
-        except Exception:
-            btn.setText("+")
 
         btn.clicked.connect(lambda _, p=producto: self.agregar_al_carrito(p))
         layout.addWidget(btn)
@@ -315,32 +309,32 @@ class NuevaVentaWindow(QWidget):
     def cargar_productos(self):
         """Cargar productos disponibles"""
         try:
-            productos = self.db_manager.get_all_products()
+            productos = self.pg_manager.get_all_products()
             self.productos_table.setRowCount(len(productos))
-            
+
             for row, producto in enumerate(productos):
                 # Código
                 self.productos_table.setItem(row, 0, QTableWidgetItem(producto['codigo_barras'] or f"P{producto['id_producto']:04d}"))
-                
+
                 # Nombre
                 self.productos_table.setItem(row, 1, QTableWidgetItem(producto['nombre']))
-                
+
                 # Precio
                 precio_item = QTableWidgetItem(f"${producto['precio_venta']:.2f}")
                 precio_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.productos_table.setItem(row, 2, precio_item)
-                
+
                 # Stock
                 stock_item = QTableWidgetItem(str(producto['stock_actual']))
                 stock_item.setTextAlignment(Qt.AlignCenter)
                 self.productos_table.setItem(row, 3, stock_item)
-                
+
                 btn_container = self._create_add_button(producto)
                 self.productos_table.setCellWidget(row, 4, btn_container)
-                
+
         except Exception as e:
             logging.error(f"Error cargando productos: {e}")
-            show_warning_dialog(self, "Error", f"Error al cargar productos: {e}")
+            show_error_dialog(self, "Error", f"No se pudo cargar los productos: {e}")
             
     def _on_search_text_changed(self):
         """Detectar cuando se ingresa texto (para capturar escáner)"""
@@ -367,12 +361,12 @@ class NuevaVentaWindow(QWidget):
         
         try:
             # Buscar producto por código exacto
-            productos = self.db_manager.search_products(codigo)
+            productos = self.pg_manager.search_products(codigo)
             
             # Filtrar por código de barras exacto
             producto_encontrado = None
             for p in productos:
-                # sqlite3.Row se accede como diccionario con []
+                # psycopg2.extras.RealDictRow se accede como diccionario con []
                 codigo_barras = p['codigo_barras'] if p['codigo_barras'] else None
                 if codigo_barras == codigo:
                     producto_encontrado = p
@@ -410,14 +404,15 @@ class NuevaVentaWindow(QWidget):
             return
             
         try:
-            productos = self.db_manager.search_products(texto)
+            productos = self.pg_manager.search_products(texto)
             self.productos_table.setRowCount(len(productos))
             
             for row, producto in enumerate(productos):
                 self.productos_table.setItem(row, 0, QTableWidgetItem(producto['codigo_barras'] or f"P{producto['id_producto']:04d}"))
                 self.productos_table.setItem(row, 1, QTableWidgetItem(producto['nombre']))
                 
-                precio_item = QTableWidgetItem(f"${producto['precio_venta']:.2f}")
+                precio = float(producto['precio_venta']) if producto['precio_venta'] is not None else 0.0
+                precio_item = QTableWidgetItem(f"${precio:.2f}")
                 precio_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.productos_table.setItem(row, 2, precio_item)
                 
@@ -430,12 +425,16 @@ class NuevaVentaWindow(QWidget):
                 
         except Exception as e:
             logging.error(f"Error buscando productos: {e}")
+            show_error_dialog(self, "Error", f"No se pudo buscar productos: {e}")
             
     def agregar_al_carrito(self, producto):
         """Agregar producto al carrito"""
         if producto['stock_actual'] <= 0:
             show_warning_dialog(self, "Sin Stock", f"El producto '{producto['nombre']}' no tiene stock disponible.")
             return
+        
+        # Convertir precio a float para evitar problemas con Decimal
+        precio = float(producto['precio_venta'])
             
         # Verificar si ya está en el carrito
         for item in self.carrito:
@@ -453,9 +452,9 @@ class NuevaVentaWindow(QWidget):
                 'id_producto': producto['id_producto'],
                 'codigo_interno': producto.get('codigo_interno', ''),
                 'nombre': producto['nombre'],
-                'precio': producto['precio_venta'],
+                'precio': precio,
                 'cantidad': 1,
-                'subtotal': producto['precio_venta'],
+                'subtotal': precio,
                 'stock_disponible': producto['stock_actual']
             })
             
@@ -492,7 +491,8 @@ class NuevaVentaWindow(QWidget):
             btn_container = self._create_remove_button(row)
             self.carrito_table.setCellWidget(row, 4, btn_container)
             
-            self.total_venta += item['subtotal']
+            # Convertir subtotal a float antes de sumar
+            self.total_venta += float(item['subtotal'])
             
         # Actualizar total
         self.total_label.setText(f"${self.total_venta:.2f}")
@@ -562,15 +562,14 @@ class NuevaVentaWindow(QWidget):
         try:
             # Crear venta en la base de datos
             venta_data = {
-                'fecha_venta': datetime.now(),
                 'total': self.total_venta,
-                'id_usuario': self.user_data.get('id_usuario', self.user_data.get('id', 1)),
                 'metodo_pago': 'efectivo',
-                'tipo_venta': 'directa',
-                'productos': self.carrito
+                'tipo_venta': 'producto',
+                'productos': self.carrito,
+                'id_usuario': self.user_data['id_usuario']
             }
             
-            venta_id = self.db_manager.create_sale(venta_data)
+            venta_id = self.pg_manager.create_sale(venta_data)
             
             if venta_id:
                 # Mostrar mensaje de éxito
@@ -605,10 +604,9 @@ class NuevaVentaWindow(QWidget):
         except Exception as e:
             logging.error(f"Error procesando venta: {e}")
             show_error_dialog(
-                self, 
-                "Error al Procesar Venta", 
-                "No se pudo completar la venta.",
-                f"Detalle: {str(e)}"
+                self,
+                "Error",
+                f"No se pudo procesar la venta: {str(e)}"
             )
             
     def mostrar_ticket(self, venta_id):
@@ -617,7 +615,7 @@ class NuevaVentaWindow(QWidget):
             venta_id=venta_id,
             carrito=self.carrito,
             total=self.total_venta,
-            usuario=self.user_data.get('nombre', 'Usuario'),
+            usuario=self.user_data.get('nombre_completo', 'Usuario'),
             parent=self
         )
         dialog.exec()
@@ -635,11 +633,26 @@ class ConfirmacionVentaDialog(QDialog):
     def setup_ui(self):
         """Configurar interfaz del diálogo"""
         self.setWindowTitle("Confirmar Venta")
-        self.setMinimumWidth(500)
-        self.setMinimumHeight(400)
+        
+        # Obtener geometría de la pantalla
+        from PySide6.QtGui import QGuiApplication
+        screen = QGuiApplication.primaryScreen().availableGeometry()
+        
+        # Usar el ancho mínimo deseado y el alto de la pantalla
+        dialog_width = 620
+        dialog_height = screen.height()
+        
+        self.setMinimumWidth(dialog_width)
+        self.setFixedHeight(dialog_height)
+        
+        # Centrar el diálogo horizontalmente
+        x = (screen.width() - dialog_width) // 2
+        y = screen.y()
+        self.move(x, y)
         
         layout = QVBoxLayout(self)
         layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
         
         # Título
         title = QLabel("CONFIRMAR VENTA")

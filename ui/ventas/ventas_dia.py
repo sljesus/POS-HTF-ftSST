@@ -31,9 +31,9 @@ class VentasDiaWindow(QWidget):
     
     cerrar_solicitado = Signal()
     
-    def __init__(self, db_manager, supabase_service, user_data, parent=None):
+    def __init__(self, pg_manager, supabase_service, user_data, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
         
@@ -100,37 +100,158 @@ class VentasDiaWindow(QWidget):
     def actualizar_datos(self):
         """Actualizar datos de ventas del día"""
         try:
-            # Obtener ventas del día
-            ventas = self.db_manager.get_sales_by_date(date.today())
+            # Obtener ventas del día usando postgres_manager
+            cursor = self.pg_manager.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    v.id_venta, 
+                    v.fecha, 
+                    v.total, 
+                    u.nombre_completo as usuario
+                FROM ventas v
+                JOIN usuarios u ON v.id_usuario = u.id_usuario
+                WHERE DATE(v.fecha) = CURRENT_DATE
+                ORDER BY v.fecha DESC
+            """)
             
-            # Calcular resumen
+            ventas = cursor.fetchall()
+
             total_vendido = sum(venta['total'] for venta in ventas)
             num_ventas = len(ventas)
-            
-            # Actualizar widgets
+
             self.total_value.setText(f"${total_vendido:.2f}")
             self.ventas_count.setText(str(num_ventas))
-                
+
         except Exception as e:
             logging.error(f"Error actualizando datos: {e}")
             show_warning_dialog(self, "Error", f"Error al cargar datos: {e}")
-    
+
     def ver_detalle_ventas(self):
         """Abrir ventana de detalle de ventas del día"""
-        dialog = DetalleVentasDiaDialog(self.db_manager, date.today(), self)
+        dialog = DetalleVentasDiaDialog(self.pg_manager, date.today(), self)
         dialog.exec()
             
     def imprimir_reporte(self):
         """Imprimir reporte de ventas del día"""
-        show_info_dialog(self, "Imprimir", "Función de impresión por implementar")
+        try:
+            from datetime import datetime
+            import os
+            
+            # Verificar si openpyxl está disponible
+            try:
+                from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            except ImportError:
+                show_warning_dialog(
+                    self,
+                    "Biblioteca requerida",
+                    "Para exportar a Excel necesitas instalar openpyxl",
+                    detail="Ejecuta: pip install openpyxl"
+                )
+                return
+            
+            # Obtener ventas del día
+            cursor = self.pg_manager.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    v.id_venta, 
+                    v.fecha, 
+                    v.total, 
+                    u.nombre_completo as usuario
+                FROM ventas v
+                JOIN usuarios u ON v.id_usuario = u.id_usuario
+                WHERE DATE(v.fecha) = CURRENT_DATE
+                ORDER BY v.fecha DESC
+            """)
+            
+            ventas = cursor.fetchall()
+            
+            # Crear libro de Excel
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Ventas del Día"
+            
+            # Estilos
+            header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+            header_font = Font(bold=True, color="FFFFFF", size=12)
+            header_alignment = Alignment(horizontal="center", vertical="center")
+            
+            border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+            
+            # Encabezados
+            headers = ["ID Venta", "Fecha", "Hora", "Total", "Usuario"]
+            
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = header_alignment
+                cell.border = border
+            
+            # Datos
+            for row, venta in enumerate(ventas, 2):
+                ws.cell(row=row, column=1, value=venta['id_venta']).border = border
+                
+                # Fecha
+                fecha = venta['fecha'].strftime("%d/%m/%Y") if isinstance(venta['fecha'], datetime) else str(venta['fecha'])
+                ws.cell(row=row, column=2, value=fecha).border = border
+                
+                # Hora
+                hora = venta['fecha'].strftime("%H:%M") if isinstance(venta['fecha'], datetime) else "N/A"
+                ws.cell(row=row, column=3, value=hora).border = border
+                
+                # Total
+                total_cell = ws.cell(row=row, column=4, value=venta['total'])
+                total_cell.number_format = '$#,##0.00'
+                total_cell.border = border
+                
+                # Usuario
+                ws.cell(row=row, column=5, value=venta.get('usuario', 'N/A')).border = border
+            
+            # Ajustar anchos de columna
+            ws.column_dimensions['A'].width = 12
+            ws.column_dimensions['B'].width = 15
+            ws.column_dimensions['C'].width = 10
+            ws.column_dimensions['D'].width = 15
+            ws.column_dimensions['E'].width = 25
+            
+            # Guardar archivo
+            fecha_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+            filename = os.path.join(desktop, f"ventas_dia_{fecha_str}.xlsx")
+            
+            wb.save(filename)
+            
+            show_info_dialog(
+                self,
+                "Exportación completada",
+                f"El reporte de ventas del día ha sido exportado exitosamente",
+                detail=f"Archivo guardado en:\n{filename}"
+            )
+            
+            logging.info(f"Ventas del día exportadas: {filename}")
+            
+        except Exception as e:
+            logging.error(f"Error exportando datos: {e}")
+            show_warning_dialog(
+                self,
+                "Error al exportar",
+                "No se pudo exportar el reporte de ventas",
+                detail=str(e)
+            )
 
 
 class DetalleVentasDiaDialog(QDialog):
     """Diálogo para ver el detalle de todas las ventas del día"""
     
-    def __init__(self, db_manager, fecha, parent=None):
+    def __init__(self, pg_manager, fecha, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.fecha = fecha
         
         self.setWindowTitle(f"Detalle de Ventas - {fecha.strftime('%d/%m/%Y')}")
@@ -183,7 +304,20 @@ class DetalleVentasDiaDialog(QDialog):
     def cargar_ventas(self):
         """Cargar ventas del día"""
         try:
-            ventas = self.db_manager.get_sales_by_date(self.fecha)
+            cursor = self.pg_manager.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    v.id_venta, 
+                    v.fecha, 
+                    v.total, 
+                    u.nombre_completo as usuario
+                FROM ventas v
+                JOIN usuarios u ON v.id_usuario = u.id_usuario
+                WHERE DATE(v.fecha) = %s
+                ORDER BY v.fecha DESC
+            """, (self.fecha,))
+            
+            ventas = cursor.fetchall()
             
             self.tabla_ventas.setRowCount(len(ventas))
             
@@ -192,7 +326,7 @@ class DetalleVentasDiaDialog(QDialog):
                 self.tabla_ventas.setItem(row, 0, QTableWidgetItem(str(venta['id_venta'])))
                 
                 # Hora
-                hora = venta['fecha_venta'].strftime("%H:%M") if isinstance(venta['fecha_venta'], datetime) else str(venta['fecha_venta'])
+                hora = venta['fecha'].strftime("%H:%M") if isinstance(venta['fecha'], datetime) else str(venta['fecha'])
                 self.tabla_ventas.setItem(row, 1, QTableWidgetItem(hora))
                 
                 # Total
@@ -219,16 +353,16 @@ class DetalleVentasDiaDialog(QDialog):
             
     def ver_detalle_comanda(self, venta_id):
         """Abrir ventana con detalle de una comanda específica"""
-        dialog = DetalleComandaDialog(self.db_manager, venta_id, self)
+        dialog = DetalleComandaDialog(self.pg_manager, venta_id, self)
         dialog.exec()
 
 
 class DetalleComandaDialog(QDialog):
     """Diálogo para ver el detalle de una comanda individual"""
     
-    def __init__(self, db_manager, venta_id, parent=None):
+    def __init__(self, pg_manager, venta_id, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.venta_id = venta_id
         
         self.setWindowTitle(f"Detalle de Comanda #{venta_id}")
@@ -304,26 +438,51 @@ class DetalleComandaDialog(QDialog):
         """Cargar detalle de la comanda"""
         try:
             # Obtener información de la venta
-            venta = self.db_manager.get_sale_by_id(self.venta_id)
+            cursor = self.pg_manager.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    v.id_venta,
+                    v.fecha,
+                    v.total,
+                    u.nombre_completo as usuario
+                FROM ventas v
+                JOIN usuarios u ON v.id_usuario = u.id_usuario
+                WHERE v.id_venta = %s
+            """, (self.venta_id,))
+            
+            venta = cursor.fetchone()
             
             if not venta:
                 show_warning_dialog(self, "Error", f"No se encontró la venta #{self.venta_id}")
                 return
             
             # Actualizar información de cabecera
-            fecha_str = venta['fecha_venta'].strftime("%d/%m/%Y %H:%M") if isinstance(venta['fecha_venta'], datetime) else str(venta['fecha_venta'])
+            fecha_str = venta['fecha'].strftime("%d/%m/%Y %H:%M") if isinstance(venta['fecha'], datetime) else str(venta['fecha'])
             self.fecha_label.setText(f"Fecha: {fecha_str}")
             self.usuario_label.setText(f"Usuario: {venta.get('usuario', 'N/A')}")
             self.total_label.setText(f"Total: ${venta['total']:.2f}")
             
             # Obtener items de la venta
-            items = self.db_manager.get_sale_items(self.venta_id)
+            cursor.execute("""
+                SELECT 
+                    dv.codigo_interno,
+                    dv.tipo_producto,
+                    dv.cantidad,
+                    dv.precio_unitario,
+                    dv.subtotal_linea,
+                    dv.nombre_producto,
+                    dv.descripcion_producto
+                FROM detalles_venta dv
+                WHERE dv.id_venta = %s
+            """, (self.venta_id,))
+            
+            items = cursor.fetchall()
             
             self.tabla_productos.setRowCount(len(items))
             
             for row, item in enumerate(items):
                 # Producto
-                self.tabla_productos.setItem(row, 0, QTableWidgetItem(item['nombre']))
+                self.tabla_productos.setItem(row, 0, QTableWidgetItem(item['nombre_producto']))
                 
                 # Cantidad
                 cantidad_item = QTableWidgetItem(str(item['cantidad']))
@@ -336,7 +495,7 @@ class DetalleComandaDialog(QDialog):
                 self.tabla_productos.setItem(row, 2, precio_item)
                 
                 # Subtotal
-                subtotal_item = QTableWidgetItem(f"${item['subtotal']:.2f}")
+                subtotal_item = QTableWidgetItem(f"${item['subtotal_linea']:.2f}")
                 subtotal_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.tabla_productos.setItem(row, 3, subtotal_item)
                 

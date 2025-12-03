@@ -14,6 +14,8 @@ from PySide6.QtCore import Qt, Signal, QDate, QEvent, QTimer
 from PySide6.QtGui import QFont
 import logging
 from datetime import datetime
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 # Importar componentes del sistema de diseño
 from ui.components import (
@@ -28,6 +30,7 @@ from ui.components import (
     show_error_dialog,
     show_success_dialog
 )
+from database.postgres_manager import PostgresManager
 
 
 class MovimientoInventarioWindow(QWidget):
@@ -36,10 +39,10 @@ class MovimientoInventarioWindow(QWidget):
     cerrar_solicitado = Signal()
     movimiento_registrado = Signal(dict)
     
-    def __init__(self, tipo_movimiento, db_manager, supabase_service, user_data, parent=None):
+    def __init__(self, tipo_movimiento, pg_manager, supabase_service, user_data, parent=None):
         super().__init__(parent)
         self.tipo_movimiento = tipo_movimiento  # "entrada" o "salida"
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
         self.producto_seleccionado = None
@@ -252,12 +255,16 @@ class MovimientoInventarioWindow(QWidget):
             return
         
         try:
+            # Verificar que la conexión esté activa
+            if not self.pg_manager.connection or self.pg_manager.connection.closed:
+                self.pg_manager.connect()
+            
             # Buscar primero por código interno
-            producto = self.db_manager.get_product_by_code(codigo)
+            producto = self.pg_manager.get_product_by_code(codigo)
             
             # Si no se encuentra, buscar por código de barras
             if not producto:
-                producto = self.db_manager.get_product_by_barcode(codigo)
+                producto = self.pg_manager.get_product_by_barcode(codigo)
             
             if producto:
                 self.producto_seleccionado = producto
@@ -302,7 +309,7 @@ class MovimientoInventarioWindow(QWidget):
                 "Producto requerido",
                 "Primero debes buscar y seleccionar un producto"
             )
-            self.search_input.setFocus()
+            self.search_bar.search_input.setFocus()
             return
         
         cantidad = self.cantidad_spin.value()
@@ -326,69 +333,86 @@ class MovimientoInventarioWindow(QWidget):
                 return
         
         try:
+            # Verificar que la conexión esté activa
+            if not self.pg_manager.connection or self.pg_manager.connection.closed:
+                self.pg_manager.connect()
+            
             # Preparar datos del movimiento
-            tipo = self.tipo_combo.currentText() if self.tipo_movimiento == "entrada" else self.motivo_combo.currentText()
+            motivo_texto = self.tipo_combo.currentText() if self.tipo_movimiento == "entrada" else self.motivo_combo.currentText()
             fecha = self.fecha_input.date().toPython().strftime("%Y-%m-%d")
             observaciones = self.observaciones_input.toPlainText().strip() or None
             
-            # Actualizar stock en inventario
-            cursor = self.db_manager.connection.cursor()
-            
-            # Obtener stock actual antes del movimiento
-            cursor.execute("SELECT stock_actual FROM inventario WHERE codigo_interno = ?", 
-                          (self.producto_seleccionado['codigo_interno'],))
-            stock_anterior = cursor.fetchone()[0]
-            
+            # Mapear el motivo seleccionado al tipo de movimiento del enum
             if self.tipo_movimiento == "entrada":
-                # Incrementar stock
-                nuevo_stock = stock_anterior + cantidad
-                cursor.execute("""
-                    UPDATE inventario 
-                    SET stock_actual = ?,
-                        fecha_ultima_entrada = CURRENT_TIMESTAMP
-                    WHERE codigo_interno = ?
-                """, (nuevo_stock, self.producto_seleccionado['codigo_interno']))
-            else:
-                # Decrementar stock
-                nuevo_stock = stock_anterior - cantidad
-                cursor.execute("""
-                    UPDATE inventario 
-                    SET stock_actual = ?,
-                        fecha_ultima_salida = CURRENT_TIMESTAMP
-                    WHERE codigo_interno = ?
-                """, (nuevo_stock, self.producto_seleccionado['codigo_interno']))
+                if motivo_texto in ["Devolución", "Devolucion"]:
+                    tipo_movimiento_db = "devolucion"
+                elif motivo_texto == "Ajuste de inventario":
+                    tipo_movimiento_db = "ajuste"
+                else:
+                    tipo_movimiento_db = "entrada"
+            else:  # salida
+                if motivo_texto == "Venta":
+                    tipo_movimiento_db = "venta"
+                elif motivo_texto == "Merma" or motivo_texto == "Vencimiento":
+                    tipo_movimiento_db = "merma"
+                elif motivo_texto == "Ajuste de inventario":
+                    tipo_movimiento_db = "ajuste"
+                else:
+                    tipo_movimiento_db = "merma"  # Por defecto para salidas
             
-            # Registrar el movimiento en la tabla de movimientos
-            cursor.execute("""
-                INSERT INTO movimientos_inventario (
-                    codigo_interno,
-                    tipo_producto,
-                    tipo_movimiento,
-                    cantidad,
+            # Usar transacción con gestor de contexto
+            with self.pg_manager.connection.cursor() as cursor:
+                # Obtener stock actual antes del movimiento
+                cursor.execute("SELECT stock_actual FROM inventario WHERE codigo_interno = %s", 
+                              (self.producto_seleccionado['codigo_interno'],))
+                result = cursor.fetchone()
+                stock_anterior = result['stock_actual'] if result else 0
+                
+                if self.tipo_movimiento == "entrada":
+                    # Incrementar stock
+                    nuevo_stock = stock_anterior + cantidad
+                    cursor.execute("""
+                        UPDATE inventario 
+                        SET stock_actual = %s,
+                            fecha_ultima_entrada = CURRENT_TIMESTAMP
+                        WHERE codigo_interno = %s
+                    """, (nuevo_stock, self.producto_seleccionado['codigo_interno']))
+                else:
+                    # Decrementar stock
+                    nuevo_stock = stock_anterior - cantidad
+                    cursor.execute("""
+                        UPDATE inventario 
+                        SET stock_actual = %s,
+                            fecha_ultima_salida = CURRENT_TIMESTAMP
+                        WHERE codigo_interno = %s
+                    """, (nuevo_stock, self.producto_seleccionado['codigo_interno']))
+                
+                # Registrar el movimiento en la tabla de movimientos
+                cursor.execute("""
+                    INSERT INTO movimientos_inventario (
+                        codigo_interno,
+                        tipo_producto,
+                        tipo_movimiento,
+                        cantidad,
+                        stock_anterior,
+                        stock_nuevo,
+                        motivo,
+                        fecha,
+                        id_usuario
+                    ) VALUES (%s, %s, %s::tipo_movimiento_inventario, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
+                """, (
+                    self.producto_seleccionado['codigo_interno'],
+                    self.producto_seleccionado['tipo'],
+                    tipo_movimiento_db,
+                    cantidad if self.tipo_movimiento == "entrada" else -cantidad,  # Positivo para entrada, negativo para salida
                     stock_anterior,
-                    stock_nuevo,
-                    motivo,
-                    fecha,
-                    id_usuario
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                self.producto_seleccionado['codigo_interno'],
-                self.producto_seleccionado['tipo'],
-                self.tipo_movimiento,
-                cantidad if self.tipo_movimiento == "entrada" else -cantidad,  # Positivo para entrada, negativo para salida
-                stock_anterior,
-                nuevo_stock,
-                tipo,
-                fecha,
-                self.user_data.get('id') or self.user_data.get('id_usuario')  # Soportar ambas claves
-            ))
-            
-            self.db_manager.connection.commit()
-            
-            # Obtener nuevo stock
-            cursor.execute("SELECT stock_actual FROM inventario WHERE codigo_interno = ?", 
-                          (self.producto_seleccionado['codigo_interno'],))
-            nuevo_stock = cursor.fetchone()[0]
+                    nuevo_stock,
+                    motivo_texto,
+                    self.user_data.get('id_usuario')
+                ))
+                
+                # Confirmar transacción
+                self.pg_manager.connection.commit()
             
             show_success_dialog(
                 self,
@@ -418,7 +442,12 @@ class MovimientoInventarioWindow(QWidget):
             self.limpiar_formulario()
             
         except Exception as e:
-            self.db_manager.connection.rollback()
+            # Asegurar rollback en caso de error
+            try:
+                self.pg_manager.connection.rollback()
+            except Exception as rollback_error:
+                logging.error(f"Error en rollback: {rollback_error}")
+                
             logging.error(f"Error registrando movimiento: {e}")
             show_error_dialog(
                 self,
@@ -429,12 +458,12 @@ class MovimientoInventarioWindow(QWidget):
     
     def limpiar_formulario(self):
         """Limpiar el formulario después de registrar"""
-        self.search_input.clear()
+        self.search_bar.clear()
         self.cantidad_spin.setValue(1)
         self.observaciones_input.clear()
         self.producto_info_label.hide()
         self.producto_seleccionado = None
-        self.search_input.setFocus()
+        self.search_bar.search_input.setFocus()
         
         if self.tipo_movimiento == "entrada":
             self.tipo_combo.setCurrentIndex(0)

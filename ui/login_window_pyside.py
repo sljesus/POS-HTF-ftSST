@@ -1,6 +1,6 @@
 """
 Ventana de Login Moderna con PySide6 para POS HTF
-Usando componentes reutilizables del sistema de diseño
+Integrado con PostgreSQL y Supabase
 """
 
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
@@ -21,9 +21,9 @@ class LoginWindow(QMainWindow):
     # Signal que se emite cuando el login es exitoso
     login_success = Signal(dict)
     
-    def __init__(self, db_manager=None, supabase_service=None):
+    def __init__(self, pg_manager=None, supabase_service=None):
         super().__init__()
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         
         # Usar colores del tema
@@ -297,19 +297,41 @@ class LoginWindow(QMainWindow):
         
     def update_connection_status(self):
         """Actualizar el indicador de conexión"""
-        if self.supabase_service and self.supabase_service.test_connection():
-            self.connection_label.setText("🟢 Conectado a Supabase")
+        # Verificar conexión a PostgreSQL local
+        pg_connected = False
+        if self.pg_manager:
+            try:
+                pg_connected = self.pg_manager.connection is not None
+            except:
+                pg_connected = False
+        
+        # Verificar conexión a Supabase
+        supabase_connected = False
+        if self.supabase_service:
+            supabase_connected = self.supabase_service.test_connection()
+        
+        # Actualizar etiqueta según estado
+        if pg_connected and supabase_connected:
+            self.connection_label.setText("🟢 Conectado (Local + Cloud)")
             self.connection_label.setStyleSheet("""
                 color: #38a169;
                 background-color: #f0fff4;
                 padding: 8px 16px;
                 border-radius: 20px;
             """)
-        else:
-            self.connection_label.setText("🟡 Modo Offline")
+        elif pg_connected:
+            self.connection_label.setText("🟡 Conectado (Solo Local)")
             self.connection_label.setStyleSheet("""
                 color: #d69e2e;
                 background-color: #fffff0;
+                padding: 8px 16px;
+                border-radius: 20px;
+            """)
+        else:
+            self.connection_label.setText("🔴 Sin conexión")
+            self.connection_label.setStyleSheet("""
+                color: #e53e3e;
+                background-color: #fff5f5;
                 padding: 8px 16px;
                 border-radius: 20px;
             """)
@@ -319,6 +341,7 @@ class LoginWindow(QMainWindow):
         username = self.username_input.text().strip()
         password = self.password_input.text().strip()
         
+        # Validar campos vacíos
         if not username:
             self.show_error("Por favor ingresa tu usuario")
             self.username_input.setFocus()
@@ -329,48 +352,52 @@ class LoginWindow(QMainWindow):
             self.password_input.setFocus()
             return
         
+        # Verificar que existe conexión a la base de datos
+        if not self.pg_manager:
+            self.show_error("No hay conexión a la base de datos")
+            return
+        
         # Deshabilitar botón mientras se procesa
         self.login_button.setEnabled(False)
         self.login_button.setText("VERIFICANDO...")
         
         try:
-            # Autenticar en base de datos local
-            user = self.db_manager.authenticate_user(username, password)
+            # Autenticar usuario en PostgreSQL local
+            user = self.pg_manager.authenticate_user(username, password)
             
             if user:
-                logging.info(f"Login exitoso: {username}")
+                logging.info(f"Login exitoso: {username} (Rol: {user['rol']})")
                 
-                # Mostrar mensaje de éxito
+                # Mostrar mensaje de éxito visual
                 self.login_button.setText("✓ ACCESO CONCEDIDO")
                 self.login_button.setStyleSheet("""
-                    background: qlineargradient(
-                        x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #48bb78,
-                        stop:1 #38a169
-                    );
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    padding: 15px;
+                    QPushButton {
+                        background: #38a169;
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        padding: 15px;
+                        font-weight: bold;
+                    }
                 """)
                 
-                # Emitir señal de login exitoso
+                # Emitir señal de login exitoso con datos del usuario
                 self.login_success.emit(user)
                 
                 # Cerrar ventana de login
                 self.close()
             else:
-                logging.warning(f"Login fallido: {username}")
+                logging.warning(f"Login fallido para usuario: {username}")
                 self.show_error("Usuario o contraseña incorrectos")
                 self.password_input.clear()
                 self.password_input.setFocus()
                 
         except Exception as e:
             logging.error(f"Error en login: {e}")
-            self.show_error(f"Error inesperado: {str(e)}")
+            self.show_error(f"Error inesperado durante la autenticación")
         
         finally:
-            # Rehabilitar botón
+            # Rehabilitar botón y restaurar texto
             self.login_button.setEnabled(True)
             self.login_button.setText("INICIAR SESIÓN")
             self.login_button.setStyleSheet("")  # Restaurar estilo original

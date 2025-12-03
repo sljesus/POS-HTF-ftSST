@@ -33,9 +33,9 @@ class NuevoProductoWindow(QWidget):
     cerrar_solicitado = Signal()
     producto_guardado = Signal()
     
-    def __init__(self, db_manager, supabase_service, user_data, parent=None):
+    def __init__(self, pg_manager, supabase_service, user_data, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
         
@@ -49,6 +49,7 @@ class NuevoProductoWindow(QWidget):
         self.barcode_timer.timeout.connect(self._verificar_codigo_barras)
         
         self.setup_ui()
+        self.cargar_ubicaciones()
     
     def setup_ui(self):
         """Configurar interfaz del formulario"""
@@ -135,6 +136,13 @@ class NuevoProductoWindow(QWidget):
         self.activo_check.setChecked(True)
         comunes_form.addRow("Estado:", self.activo_check)
         
+        # Ubicación de Almacenamiento
+        self.ubicacion_combo = QComboBox()
+        self.ubicacion_combo.setMinimumHeight(45)
+        self.ubicacion_combo.addItem("-- Seleccionar ubicación --", None)
+        # Se cargarán las ubicaciones del catálogo en __init__
+        comunes_form.addRow("Ubicación *:", self.ubicacion_combo)
+        
         form_layout.addLayout(comunes_form)
         
         # ===== CAMPOS DE PRODUCTOS NORMALES =====
@@ -182,7 +190,7 @@ class NuevoProductoWindow(QWidget):
         normales_layout.addLayout(normales_form)
         form_layout.addWidget(self.normales_widget)
         
-        # ===== CAMPOS DE SUPLEMENTOS =====
+        # ===== CAMPOS DE SUPLEMENTTOS =====
         self.suplementos_widget = QWidget()
         suplementos_layout = QVBoxLayout(self.suplementos_widget)
         suplementos_layout.setContentsMargins(0, 0, 0, 0)
@@ -318,46 +326,45 @@ class NuevoProductoWindow(QWidget):
         
         try:
             # Buscar si ya existe el código de barras
-            cursor = self.db_manager.connection.cursor()
-            
-            # Buscar en productos varios
-            cursor.execute('''
-                SELECT codigo_interno, nombre 
-                FROM ca_productos_varios 
-                WHERE codigo_barras = ?
-            ''', (codigo_barras,))
-            
-            producto_varios = cursor.fetchone()
-            
-            if producto_varios:
-                logging.warning(f"Código de barras duplicado en productos varios: {codigo_barras}")
-                show_warning_dialog(
-                    self,
-                    "Código de barras duplicado",
-                    f"El código de barras ya existe en:\n\n"
-                    f"Código Interno: {producto_varios['codigo_interno']}\n"
-                    f"Nombre: {producto_varios['nombre']}"
-                )
-                self.codigo_barras_input.setFocus()
-                self.codigo_barras_input.selectAll()
-                return
-            
-            # Buscar en suplementos
-            cursor.execute('''
-                SELECT codigo_interno, nombre 
-                FROM ca_suplementos 
-                WHERE codigo_barras = ?
-            ''', (codigo_barras,))
-            
-            producto_suplemento = cursor.fetchone()
-            
-            if producto_suplemento:
-                logging.warning(f"Código de barras duplicado en suplementos: {codigo_barras}")
-                show_warning_dialog(
-                    self,
-                    "Código de barras duplicado",
-                    f"El código de barras ya existe en:\n\n"
-                    f"Código Interno: {producto_suplemento['codigo_interno']}\n"
+            with self.pg_manager.connection.cursor() as cursor:
+                # Buscar en productos varios
+                cursor.execute('''
+                    SELECT codigo_interno, nombre 
+                    FROM ca_productos_varios 
+                    WHERE codigo_barras = %s
+                ''', (codigo_barras,))
+                
+                producto_varios = cursor.fetchone()
+                
+                if producto_varios:
+                    logging.warning(f"Código de barras duplicado en productos varios: {codigo_barras}")
+                    show_warning_dialog(
+                        self,
+                        "Código de barras duplicado",
+                        f"El código de barras ya existe en:\n\n"
+                        f"Código Interno: {producto_varios['codigo_interno']}\n"
+                        f"Nombre: {producto_varios['nombre']}"
+                    )
+                    self.codigo_barras_input.setFocus()
+                    self.codigo_barras_input.selectAll()
+                    return
+                
+                # Buscar en suplementos
+                cursor.execute('''
+                    SELECT codigo_interno, nombre 
+                    FROM ca_suplementos 
+                    WHERE codigo_barras = %s
+                ''', (codigo_barras,))
+                
+                producto_suplemento = cursor.fetchone()
+                
+                if producto_suplemento:
+                    logging.warning(f"Código de barras duplicado en suplementos: {codigo_barras}")
+                    show_warning_dialog(
+                        self,
+                        "Código de barras duplicado",
+                        f"El código de barras ya existe en:\n\n"
+                        f"Código Interno: {producto_suplemento['codigo_interno']}\n"
                     f"Nombre: {producto_suplemento['nombre']}"
                 )
                 self.codigo_barras_input.setFocus()
@@ -384,6 +391,7 @@ class NuevoProductoWindow(QWidget):
         self.descripcion_input.clear()
         self.precio_input.setValue(0.0)
         self.activo_check.setChecked(True)
+        self.ubicacion_combo.setCurrentIndex(0)  # Resetear a "Seleccionar"
         
         # Campos de productos normales
         self.codigo_barras_input.clear()
@@ -401,6 +409,41 @@ class NuevoProductoWindow(QWidget):
         self.codigo_interno_input.setFocus()
         
         logging.info("Formulario limpiado")
+    
+    def cargar_ubicaciones(self):
+        """Cargar ubicaciones desde el catálogo ca_ubicaciones"""
+        try:
+            with self.pg_manager.connection.cursor() as cursor:
+                cursor.execute('''
+                    SELECT id_ubicacion, nombre 
+                    FROM ca_ubicaciones 
+                    WHERE activa = TRUE
+                    ORDER BY nombre
+                ''')
+                
+                ubicaciones = cursor.fetchall()
+                
+                # Agregar ubicaciones al combo
+                for ubicacion in ubicaciones:
+                    self.ubicacion_combo.addItem(
+                        ubicacion['nombre'],
+                        ubicacion['id_ubicacion']
+                    )
+                
+                if ubicaciones:
+                    # Seleccionar la segunda opción (primera ubicación real) por defecto
+                    self.ubicacion_combo.setCurrentIndex(1)
+                    logging.info(f"Cargadas {len(ubicaciones)} ubicaciones")
+                else:
+                    logging.warning("No hay ubicaciones disponibles en el catálogo")
+                    
+        except Exception as e:
+            logging.error(f"Error cargando ubicaciones: {e}")
+            show_error_dialog(
+                self,
+                "Error",
+                "No se pudieron cargar las ubicaciones del catálogo"
+            )
     
     def confirmar_cancelar(self):
         """Confirmar antes de cancelar"""
@@ -432,6 +475,12 @@ class NuevoProductoWindow(QWidget):
             self.precio_input.setFocus()
             return False
         
+        # Validar ubicación
+        if self.ubicacion_combo.currentIndex() == 0:
+            show_warning_dialog(self, "Campo requerido", "Debe seleccionar una ubicación.")
+            self.ubicacion_combo.setFocus()
+            return False
+        
         # Validar campos específicos de suplementos
         if not is_normal:
             if not self.marca_input.text().strip():
@@ -441,7 +490,7 @@ class NuevoProductoWindow(QWidget):
         
         # Verificar código interno único
         codigo = self.codigo_interno_input.text().strip().upper()
-        if self.db_manager.producto_existe(codigo):
+        if self.pg_manager.producto_existe(codigo):
             show_error_dialog(
                 self,
                 "Código duplicado",
@@ -480,47 +529,44 @@ class NuevoProductoWindow(QWidget):
                     'categoria': self.categoria_input.text().strip() or 'General',
                     'requiere_refrigeracion': self.refrigeracion_check.isChecked(),
                     'peso_gr': self.peso_input.value() if self.peso_input.value() > 0 else None,
-                    'activo': activo,
-                    'needs_sync': 1
+                    'activo': activo
                 }
                 
-                success = self.db_manager.insertar_producto_varios(producto_data)
+                success = self.pg_manager.insertar_producto_varios(producto_data)
                 tipo_msg = "producto normal"
             else:
                 # Guardar suplemento
                 suplemento_data = {
                     'codigo_interno': codigo_interno,
-                    'nombre': nombre,
-                    'descripcion': descripcion,
-                    'codigo_interno': codigo_interno,
                     'codigo_barras': self.codigo_barras_input.text().strip() or None,
                     'nombre': nombre,
-                    'descripcion': self.descripcion_input.toPlainText().strip() or None,
+                    'descripcion': descripcion,
                     'marca': self.marca_input.text().strip(),
                     'tipo': self.tipo_suplemento_combo.currentText(),
                     'peso_neto_gr': self.peso_neto_input.value() if self.peso_neto_input.value() > 0 else None,
                     'precio_venta': precio,
                     'activo': activo,
-                    'fecha_vencimiento': self.fecha_vencimiento_input.date().toString("yyyy-MM-dd"),
-                    'needs_sync': 1
+                    'fecha_vencimiento': self.fecha_vencimiento_input.date().toString("yyyy-MM-dd")
                 }
                 
-                success = self.db_manager.insertar_suplemento(suplemento_data)
+                success = self.pg_manager.insertar_suplemento(suplemento_data)
                 tipo_msg = "suplemento"
             
             if success:
-                # Crear registro en inventario
+                # Obtener ID de ubicación seleccionada
+                id_ubicacion = self.ubicacion_combo.currentData()
+                
+                # Crear registro en inventario con la ubicación
                 inventario_data = {
                     'codigo_interno': codigo_interno,
                     'tipo_producto': 'varios' if is_normal else 'suplemento',
                     'stock_actual': 0,
                     'stock_minimo': 5,
-                    'ubicacion': 'Recepción',
-                    'activo': activo,
-                    'needs_sync': 1
+                    'id_ubicacion': id_ubicacion,
+                    'activo': activo
                 }
                 
-                self.db_manager.crear_inventario(inventario_data)
+                self.pg_manager.crear_inventario(inventario_data)
                 
                 # Mostrar mensaje de éxito
                 show_info_dialog(

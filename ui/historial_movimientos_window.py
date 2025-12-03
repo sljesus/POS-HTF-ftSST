@@ -9,9 +9,9 @@ from PySide6.QtWidgets import (
     QHeaderView, QLineEdit, QSizePolicy, QFrame,
     QComboBox, QDateEdit, QLabel
 )
-from PySide6.QtCore import Qt, Signal, QDate
+from PySide6.QtCore import Qt, Signal, QDate, QThread, QTimer
 from PySide6.QtGui import QFont
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 # Importar componentes del sistema de diseño
@@ -28,17 +28,72 @@ from ui.components import (
 )
 
 
+class MovimientosLoaderThread(QThread):
+    """Hilo para cargar movimientos de forma asíncrona"""
+    
+    movimientos_loaded = Signal(list)
+    error_occurred = Signal(str)
+    
+    def __init__(self, pg_manager):
+        super().__init__()
+        self.pg_manager = pg_manager
+    
+    def run(self):
+        """Cargar movimientos desde la base de datos en un hilo separado"""
+        try:
+            # Verificar que la conexión esté activa
+            if not self.pg_manager.connection or self.pg_manager.connection.closed:
+                self.pg_manager.connect()
+                
+            with self.pg_manager.connection.cursor() as cursor:
+                # Query para obtener movimientos con información del producto y usuario
+                query = """
+                    SELECT 
+                        m.id_movimiento,
+                        m.fecha,
+                        m.tipo_movimiento,
+                        m.codigo_interno,
+                        m.tipo_producto,
+                        m.cantidad,
+                        m.stock_anterior,
+                        m.stock_nuevo,
+                        m.motivo,
+                        m.id_usuario,
+                        m.id_venta,
+                        COALESCE(pv.nombre, s.nombre, 'Producto desconocido') as nombre_producto,
+                        u.nombre_usuario
+                    FROM movimientos_inventario m
+                    LEFT JOIN ca_productos_varios pv ON m.codigo_interno = pv.codigo_interno 
+                        AND m.tipo_producto = 'varios'
+                    LEFT JOIN ca_suplementos s ON m.codigo_interno = s.codigo_interno 
+                        AND m.tipo_producto = 'suplemento'
+                    LEFT JOIN usuarios u ON m.id_usuario = u.id_usuario
+                    ORDER BY m.fecha DESC, m.id_movimiento DESC
+                    LIMIT 1000
+                """
+                
+                cursor.execute(query)
+                rows = cursor.fetchall()
+                
+                self.movimientos_loaded.emit(rows)
+                
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+
+
 class HistorialMovimientosWindow(QWidget):
     """Widget para ver el historial completo de movimientos de inventario"""
     
     cerrar_solicitado = Signal()
     
-    def __init__(self, db_manager, supabase_service, user_data, parent=None):
+    def __init__(self, pg_manager, supabase_service, user_data, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
         self.movimientos_data = []
+        self.movimientos_filtrados = []
+        self.loader_thread = None
         
         self.setup_ui()
         self.cargar_movimientos()
@@ -55,6 +110,21 @@ class HistorialMovimientosWindow(QWidget):
         content.setLayout(content_layout)
         
         # Panel de filtros
+        filters_panel = self.create_filters_panel()
+        content_layout.addWidget(filters_panel)
+        
+        # Panel para la tabla
+        table_panel = self.create_table_panel()
+        content_layout.addWidget(table_panel)
+        
+        # Panel de información y botones
+        info_buttons_panel = self.create_info_buttons_panel()
+        content_layout.addWidget(info_buttons_panel)
+        
+        layout.addWidget(content)
+    
+    def create_filters_panel(self):
+        """Crear el panel de filtros"""
         filters_panel = ContentPanel()
         filters_layout = QVBoxLayout(filters_panel)
         
@@ -64,9 +134,23 @@ class HistorialMovimientosWindow(QWidget):
         
         # Buscador
         self.search_bar = SearchBar("Buscar por código, nombre o usuario...")
+        self.search_bar.connect_search(self.aplicar_filtros)
         filters_row1.addWidget(self.search_bar, stretch=3)
         
         # Filtro por tipo de movimiento
+        tipo_container = self.create_tipo_filter()
+        filters_row1.addWidget(tipo_container, stretch=1)
+        
+        filters_layout.addLayout(filters_row1)
+        
+        # Segunda fila - Rango de fechas
+        filters_row2 = self.create_fecha_filters()
+        filters_layout.addLayout(filters_row2)
+        
+        return filters_panel
+    
+    def create_tipo_filter(self):
+        """Crear el filtro por tipo de movimiento"""
         tipo_container = QWidget()
         tipo_layout = QVBoxLayout(tipo_container)
         tipo_layout.setContentsMargins(0, 0, 0, 0)
@@ -87,10 +171,10 @@ class HistorialMovimientosWindow(QWidget):
         self.tipo_combo.currentTextChanged.connect(self.aplicar_filtros)
         tipo_layout.addWidget(self.tipo_combo)
         
-        filters_row1.addWidget(tipo_container, stretch=1)
-        filters_layout.addLayout(filters_row1)
-        
-        # Segunda fila - Rango de fechas
+        return tipo_container
+    
+    def create_fecha_filters(self):
+        """Crear los filtros de fecha"""
         filters_row2 = QHBoxLayout()
         filters_row2.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
         
@@ -143,13 +227,10 @@ class HistorialMovimientosWindow(QWidget):
         btn_limpiar.clicked.connect(self.limpiar_filtros)
         filters_row2.addWidget(btn_limpiar, alignment=Qt.AlignBottom)
         
-        filters_layout.addLayout(filters_row2)
-        content_layout.addWidget(filters_panel)
-        
-        # Conectar búsqueda
-        self.search_bar.connect_search(self.aplicar_filtros)
-        
-        # Panel para la tabla
+        return filters_row2
+    
+    def create_table_panel(self):
+        """Crear el panel con la tabla de movimientos"""
         table_panel = ContentPanel()
         table_layout = QVBoxLayout(table_panel)
         table_layout.setContentsMargins(0, 0, 0, 0)
@@ -182,9 +263,10 @@ class HistorialMovimientosWindow(QWidget):
         self.movimientos_table.verticalHeader().setVisible(False)
         
         table_layout.addWidget(self.movimientos_table)
-        content_layout.addWidget(table_panel)
-        
-        # Panel de información y botones
+        return table_panel
+    
+    def create_info_buttons_panel(self):
+        """Crear el panel de información y botones"""
         info_buttons_panel = ContentPanel()
         info_buttons_layout = QHBoxLayout(info_buttons_panel)
         
@@ -208,71 +290,79 @@ class HistorialMovimientosWindow(QWidget):
         btn_volver.setMaximumWidth(200)
         info_buttons_layout.addWidget(btn_volver)
         
-        content_layout.addWidget(info_buttons_panel)
-        layout.addWidget(content)
+        return info_buttons_panel
     
     def cargar_movimientos(self):
-        """Cargar todos los movimientos desde la base de datos"""
+        """Cargar todos los movimientos desde la base de datos de forma asíncrona"""
         try:
-            cursor = self.db_manager.connection.cursor()
+            # Mostrar indicador de carga
+            self.info_label.setText("Cargando movimientos...")
+            self.movimientos_table.setRowCount(0)
             
-            # Query para obtener movimientos con información del producto y usuario
-            query = """
-                SELECT 
-                    m.id_movimiento,
-                    m.fecha,
-                    m.tipo_movimiento,
-                    m.codigo_interno,
-                    m.tipo_producto,
-                    m.cantidad,
-                    m.stock_anterior,
-                    m.stock_nuevo,
-                    m.motivo,
-                    m.id_usuario,
-                    m.id_venta,
-                    COALESCE(pv.nombre, s.nombre, 'Producto desconocido') as nombre_producto,
-                    u.nombre_usuario
-                FROM movimientos_inventario m
-                LEFT JOIN ca_productos_varios pv ON m.codigo_interno = pv.codigo_interno 
-                    AND m.tipo_producto = 'producto_varios'
-                LEFT JOIN ca_suplementos s ON m.codigo_interno = s.codigo_interno 
-                    AND m.tipo_producto = 'suplemento'
-                LEFT JOIN usuarios u ON m.id_usuario = u.id_usuario
-                ORDER BY m.fecha DESC, m.id_movimiento DESC
-            """
+            # Detener hilo anterior si existe
+            if self.loader_thread and self.loader_thread.isRunning():
+                self.loader_thread.terminate()
+                self.loader_thread.wait()
             
-            cursor.execute(query)
-            rows = cursor.fetchall()
+            # Crear y ejecutar hilo de carga
+            self.loader_thread = MovimientosLoaderThread(self.pg_manager)
+            self.loader_thread.movimientos_loaded.connect(self.procesar_datos_movimientos)
+            self.loader_thread.error_occurred.connect(self.mostrar_error_carga)
+            self.loader_thread.start()
             
+        except Exception as e:
+            logging.error(f"Error iniciando carga de movimientos: {e}")
+            show_error_dialog(
+                self,
+                "Error al cargar",
+                "No se pudieron cargar los movimientos",
+                detail=str(e)
+            )
+    
+    def procesar_datos_movimientos(self, rows):
+        """Procesar los datos de movimientos cargados desde la base de datos"""
+        try:
             self.movimientos_data = []
+            
             for row in rows:
                 self.movimientos_data.append({
-                    'id_movimiento': row[0],
-                    'fecha': row[1],
-                    'tipo_movimiento': row[2],
-                    'codigo_interno': row[3],
-                    'tipo_producto': row[4],
-                    'cantidad': row[5],
-                    'stock_anterior': row[6],
-                    'stock_nuevo': row[7],
-                    'motivo': row[8] or '',
-                    'id_usuario': row[9],
-                    'id_venta': row[10],
-                    'nombre_producto': row[11],
-                    'nombre_usuario': row[12] or 'Usuario desconocido'
+                    'id_movimiento': row['id_movimiento'],
+                    'fecha': row['fecha'],
+                    'tipo_movimiento': row['tipo_movimiento'],
+                    'codigo_interno': row['codigo_interno'],
+                    'tipo_producto': row['tipo_producto'],
+                    'cantidad': row['cantidad'],
+                    'stock_anterior': row['stock_anterior'],
+                    'stock_nuevo': row['stock_nuevo'],
+                    'motivo': row['motivo'] or '',
+                    'id_usuario': row['id_usuario'],
+                    'id_venta': row['id_venta'],
+                    'nombre_producto': row['nombre_producto'],
+                    'nombre_usuario': row['nombre_usuario'] or 'Usuario desconocido'
                 })
             
             self.aplicar_filtros()
             logging.info(f"Movimientos cargados: {len(self.movimientos_data)}")
             
         except Exception as e:
-            logging.error(f"Error cargando movimientos: {e}")
+            logging.error(f"Error procesando datos de movimientos: {e}")
             show_error_dialog(
                 self,
-                "Error al cargar",
-                "No se pudieron cargar los movimientos del inventario",
+                "Error al procesar datos",
+                "No se pudieron procesar los datos de movimientos",
                 detail=str(e)
             )
+    
+    def mostrar_error_carga(self, error_msg):
+        """Mostrar mensaje de error al cargar movimientos"""
+        logging.error(f"Error cargando movimientos: {error_msg}")
+        show_error_dialog(
+            self,
+            "Error al cargar",
+            "No se pudieron cargar los movimientos",
+            detail=error_msg
+        )
+        self.info_label.setText("Error al cargar movimientos")
     
     def aplicar_filtros(self):
         """Aplicar todos los filtros activos"""
@@ -284,7 +374,7 @@ class HistorialMovimientosWindow(QWidget):
             fecha_hasta = self.fecha_fin.date().toPython()
             
             # Filtrar datos
-            movimientos_filtrados = []
+            self.movimientos_filtrados = []
             for mov in self.movimientos_data:
                 # Filtro de texto
                 if texto_busqueda:
@@ -306,9 +396,9 @@ class HistorialMovimientosWindow(QWidget):
                 if not (fecha_desde <= fecha_mov <= fecha_hasta):
                     continue
                 
-                movimientos_filtrados.append(mov)
+                self.movimientos_filtrados.append(mov)
             
-            self.mostrar_movimientos(movimientos_filtrados)
+            self.mostrar_movimientos(self.movimientos_filtrados)
             
         except Exception as e:
             logging.error(f"Error aplicando filtros: {e}")
@@ -521,3 +611,12 @@ class HistorialMovimientosWindow(QWidget):
                 "No se pudo generar el archivo Excel",
                 detail=str(e)
             )
+    
+    def closeEvent(self, event):
+        """Evento al cerrar la ventana"""
+        # Detener hilo de carga si está activo
+        if self.loader_thread and self.loader_thread.isRunning():
+            self.loader_thread.terminate()
+            self.loader_thread.wait()
+            
+        super().closeEvent(event)

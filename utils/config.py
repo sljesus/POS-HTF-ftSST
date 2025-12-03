@@ -30,7 +30,14 @@ class Config:
         self.SECONDARY_COLOR = "#A23B72"
         self.BACKGROUND_COLOR = "#F18F01"
         self.TEXT_COLOR = "#C73E1D"
-    
+        
+        # Configuración de la base de datos PostgreSQL
+        self.DB_HOST = os.getenv('DB_HOST', 'localhost')
+        self.DB_PORT = os.getenv('DB_PORT', '5432')
+        self.DB_NAME = os.getenv('DB_NAME', 'htf_gimnasio')
+        self.DB_USER = os.getenv('DB_USER', 'postgres')
+        self.DB_PASSWORD = os.getenv('DB_PASSWORD', 'password')
+
     def validate_config(self):
         """Validar configuración básica"""
         required_vars = ['SUPABASE_URL', 'SUPABASE_KEY']
@@ -50,3 +57,13 @@ class Config:
     def get_database_path(self):
         """Obtener ruta completa de la base de datos"""
         return os.path.abspath(self.DATABASE_PATH)
+    
+    def get_postgres_config(self):
+        """Obtener configuración de PostgreSQL como diccionario"""
+        return {
+            'host': self.DB_HOST,
+            'port': self.DB_PORT,
+            'database': self.DB_NAME,
+            'user': self.DB_USER,
+            'password': self.DB_PASSWORD
+        }

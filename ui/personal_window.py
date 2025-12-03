@@ -31,9 +31,9 @@ from ui.components import (
 class FormularioPersonalDialog(QDialog):
     """Diálogo con formulario para agregar/editar personal"""
     
-    def __init__(self, db_manager, personal_data=None, parent=None):
+    def __init__(self, pg_manager, personal_data=None, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.personal_data = personal_data
         self.setWindowTitle("Datos del Personal")
         self.setModal(True)
@@ -68,7 +68,7 @@ class FormularioPersonalDialog(QDialog):
             QLineEdit, QComboBox, QDateEdit {{
                 padding: 8px;
                 border: 2px solid #e5e7eb;
-                border-radius: 4px;
+                border-radius:4px;
                 font-family: {WindowsPhoneTheme.FONT_FAMILY};
                 font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
                 background-color: white;
@@ -225,7 +225,7 @@ class FormularioPersonalDialog(QDialog):
             return
             
         try:
-            cursor = self.db_manager.connection.cursor()
+            cursor = self.pg_manager.connection.cursor()
             
             # Generar código QR único si es nuevo
             if not self.personal_data:
@@ -238,19 +238,19 @@ class FormularioPersonalDialog(QDialog):
             
             if self.personal_data:
                 # Actualizar
-                cursor.execute('''
+                cursor.execute("""
                     UPDATE personal SET
-                        nombres = ?,
-                        apellido_paterno = ?,
-                        apellido_materno = ?,
-                        rol = ?,
-                        telefono = ?,
-                        email = ?,
-                        numero_empleado = ?,
-                        fecha_contratacion = ?,
+                        nombres = %s,
+                        apellido_paterno = %s,
+                        apellido_materno = %s,
+                        rol = %s,
+                        telefono = %s,
+                        email = %s,
+                        numero_empleado = %s,
+                        fecha_contratacion = %s,
                         needs_sync = 1
-                    WHERE id_personal = ?
-                ''', (
+                    WHERE id_personal = %s
+                """, (
                     self.input_nombres.text().strip(),
                     self.input_apellido_paterno.text().strip(),
                     self.input_apellido_materno.text().strip(),
@@ -264,13 +264,13 @@ class FormularioPersonalDialog(QDialog):
                 mensaje = "Personal actualizado correctamente"
             else:
                 # Insertar
-                cursor.execute('''
+                cursor.execute("""
                     INSERT INTO personal (
                         nombres, apellido_paterno, apellido_materno, rol,
                         telefono, email, numero_empleado, codigo_qr,
                         fecha_contratacion, activo, needs_sync
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
-                ''', (
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, 1)
+                """, (
                     self.input_nombres.text().strip(),
                     self.input_apellido_paterno.text().strip(),
                     self.input_apellido_materno.text().strip(),
@@ -283,7 +283,7 @@ class FormularioPersonalDialog(QDialog):
                 ))
                 mensaje = "Personal registrado correctamente"
                 
-            self.db_manager.connection.commit()
+            self.pg_manager.connection.commit()
             show_success_dialog(self, "Éxito", mensaje)
             
             # Aceptar el diálogo
@@ -299,9 +299,9 @@ class PersonalWindow(QWidget):
     
     cerrar_solicitado = Signal()
     
-    def __init__(self, db_manager, supabase_service, parent=None):
+    def __init__(self, pg_manager, supabase_service, parent=None):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         
         self.setup_ui()
@@ -399,8 +399,8 @@ class PersonalWindow(QWidget):
     def cargar_personal(self):
         """Cargar lista de personal"""
         try:
-            cursor = self.db_manager.connection.cursor()
-            cursor.execute('''
+            cursor = self.pg_manager.connection.cursor()
+            cursor.execute("""
                 SELECT 
                     id_personal,
                     nombres,
@@ -412,10 +412,8 @@ class PersonalWindow(QWidget):
                     activo
                 FROM personal
                 ORDER BY apellido_paterno, apellido_materno, nombres
-            ''')
-            
+            """)
             personal = cursor.fetchall()
-            
             self.tabla_personal.setRowCount(0)
             
             for persona in personal:
@@ -454,7 +452,7 @@ class PersonalWindow(QWidget):
     
     def agregar_personal(self):
         """Abrir formulario para agregar personal"""
-        dialog = FormularioPersonalDialog(self.db_manager, parent=self)
+        dialog = FormularioPersonalDialog(self.pg_manager, parent=self)
         if dialog.exec() == QDialog.Accepted:
             self.cargar_personal()
     
@@ -469,15 +467,15 @@ class PersonalWindow(QWidget):
         id_personal = int(self.tabla_personal.item(row, 0).text())
         
         try:
-            cursor = self.db_manager.connection.cursor()
-            cursor.execute('''
-                SELECT * FROM personal WHERE id_personal = ?
-            ''', (id_personal,))
+            cursor = self.pg_manager.connection.cursor()
+            cursor.execute("""
+                SELECT * FROM personal WHERE id_personal = %s
+            """, (id_personal,))
             
             persona = cursor.fetchone()
             if persona:
                 dialog = FormularioPersonalDialog(
-                    self.db_manager, 
+                    self.pg_manager, 
                     personal_data=dict(persona),
                     parent=self
                 )
@@ -508,16 +506,16 @@ class PersonalWindow(QWidget):
             cancel_text="Cancelar"
         ):
             try:
-                cursor = self.db_manager.connection.cursor()
-                cursor.execute('''
+                cursor = self.pg_manager.connection.cursor()
+                cursor.execute("""
                     UPDATE personal SET
                         activo = 0,
-                        fecha_baja = ?,
+                        fecha_baja = %s,
                         needs_sync = 1
-                    WHERE id_personal = ?
-                ''', (date.today().strftime('%Y-%m-%d'), id_personal))
+                    WHERE id_personal = %s
+                """, (date.today().strftime('%Y-%m-%d'), id_personal))
                 
-                self.db_manager.connection.commit()
+                self.pg_manager.connection.commit()
                 show_success_dialog(self, "Éxito", "Personal dado de baja correctamente")
                 
                 self.cargar_personal()

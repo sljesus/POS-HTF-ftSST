@@ -9,9 +9,9 @@ from PySide6.QtWidgets import (
     QHeaderView, QLineEdit, QSizePolicy, QFrame,
     QComboBox, QDateEdit, QLabel
 )
-from PySide6.QtCore import Qt, Signal, QDate
+from PySide6.QtCore import Qt, Signal, QDate, QThread, QTimer  # Eliminado pyqtSignal
 from PySide6.QtGui import QFont
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 # Importar componentes del sistema de diseño
@@ -28,6 +28,49 @@ from ui.components import (
 )
 
 
+class AccesosLoaderThread(QThread):
+    """Hilo para cargar accesos de forma asíncrona"""
+    
+    accesos_loaded = Signal(list)  # Cambiado de pyqtSignal a Signal
+    error_occurred = Signal(str)   # Cambiado de pyqtSignal a Signal
+    
+    def __init__(self, supabase_service):
+        super().__init__()
+        self.supabase_service = supabase_service
+    
+    def run(self):
+        """Cargar accesos desde Supabase en un hilo separado"""
+        try:
+            if self.supabase_service and self.supabase_service.is_connected:
+                # Consultar registro_entradas desde Supabase con relaciones
+                response = self.supabase_service.client.table('registro_entradas')\
+                    .select('''
+                        *,
+                        miembros(
+                            nombres,
+                            apellido_paterno,
+                            apellido_materno,
+                            codigo_qr
+                        ),
+                        personal(
+                            nombres,
+                            apellido_paterno,
+                            apellido_materno,
+                            id_personal,
+                            numero_empleado
+                        )
+                    ''')\
+                    .order('fecha_entrada', desc=True)\
+                    .execute()
+                
+                rows = response.data if response.data else []
+                self.accesos_loaded.emit(rows)
+            else:
+                self.error_occurred.emit("No hay conexión a Supabase")
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+
+
 class HistorialAccesoWindow(QWidget):
     """Widget para ver el historial completo de accesos al gimnasio"""
     
@@ -39,9 +82,15 @@ class HistorialAccesoWindow(QWidget):
         self.supabase_service = supabase_service
         self.user_data = user_data
         self.accesos_data = []
+        self.accesos_filtrados = []
+        self.loader_thread = None
+        self.update_timer = None
         
         self.setup_ui()
         self.cargar_accesos()
+        
+        # Configurar timer para actualizar tiempos en tiempo real
+        self.setup_update_timer()
     
     def setup_ui(self):
         """Configurar interfaz del historial"""
@@ -55,6 +104,21 @@ class HistorialAccesoWindow(QWidget):
         content.setLayout(content_layout)
         
         # Panel de filtros
+        filters_panel = self.create_filters_panel()
+        content_layout.addWidget(filters_panel)
+        
+        # Panel para la tabla
+        table_panel = self.create_table_panel()
+        content_layout.addWidget(table_panel)
+        
+        # Panel de información y botones
+        info_buttons_panel = self.create_info_buttons_panel()
+        content_layout.addWidget(info_buttons_panel)
+        
+        layout.addWidget(content)
+    
+    def create_filters_panel(self):
+        """Crear el panel de filtros"""
         filters_panel = ContentPanel()
         filters_layout = QVBoxLayout(filters_panel)
         
@@ -64,9 +128,27 @@ class HistorialAccesoWindow(QWidget):
         
         # Buscador
         self.search_bar = SearchBar("Buscar por nombre, código o área...")
+        self.search_bar.connect_search(self.aplicar_filtros)
         filters_row1.addWidget(self.search_bar, stretch=3)
         
         # Filtro por tipo de acceso
+        tipo_container = self.create_tipo_filter()
+        filters_row1.addWidget(tipo_container, stretch=1)
+        
+        # Filtro por estado (dentro/fuera)
+        estado_container = self.create_estado_filter()
+        filters_row1.addWidget(estado_container, stretch=1)
+        
+        filters_layout.addLayout(filters_row1)
+        
+        # Segunda fila - Rango de fechas
+        filters_row2 = self.create_fecha_filters()
+        filters_layout.addLayout(filters_row2)
+        
+        return filters_panel
+    
+    def create_tipo_filter(self):
+        """Crear el filtro por tipo de acceso"""
         tipo_container = QWidget()
         tipo_layout = QVBoxLayout(tipo_container)
         tipo_layout.setContentsMargins(0, 0, 0, 0)
@@ -87,9 +169,10 @@ class HistorialAccesoWindow(QWidget):
         self.tipo_combo.currentTextChanged.connect(self.aplicar_filtros)
         tipo_layout.addWidget(self.tipo_combo)
         
-        filters_row1.addWidget(tipo_container, stretch=1)
-        
-        # Filtro por estado (dentro/fuera)
+        return tipo_container
+    
+    def create_estado_filter(self):
+        """Crear el filtro por estado"""
         estado_container = QWidget()
         estado_layout = QVBoxLayout(estado_container)
         estado_layout.setContentsMargins(0, 0, 0, 0)
@@ -109,10 +192,10 @@ class HistorialAccesoWindow(QWidget):
         self.estado_combo.currentTextChanged.connect(self.aplicar_filtros)
         estado_layout.addWidget(self.estado_combo)
         
-        filters_row1.addWidget(estado_container, stretch=1)
-        filters_layout.addLayout(filters_row1)
-        
-        # Segunda fila - Rango de fechas
+        return estado_container
+    
+    def create_fecha_filters(self):
+        """Crear los filtros de fecha"""
         filters_row2 = QHBoxLayout()
         filters_row2.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
         
@@ -165,13 +248,10 @@ class HistorialAccesoWindow(QWidget):
         btn_limpiar.clicked.connect(self.limpiar_filtros)
         filters_row2.addWidget(btn_limpiar, alignment=Qt.AlignBottom)
         
-        filters_layout.addLayout(filters_row2)
-        content_layout.addWidget(filters_panel)
-        
-        # Conectar búsqueda
-        self.search_bar.connect_search(self.aplicar_filtros)
-        
-        # Panel para la tabla
+        return filters_row2
+    
+    def create_table_panel(self):
+        """Crear el panel con la tabla de accesos"""
         table_panel = ContentPanel()
         table_layout = QVBoxLayout(table_panel)
         table_layout.setContentsMargins(0, 0, 0, 0)
@@ -203,9 +283,10 @@ class HistorialAccesoWindow(QWidget):
         self.accesos_table.verticalHeader().setVisible(False)
         
         table_layout.addWidget(self.accesos_table)
-        content_layout.addWidget(table_panel)
-        
-        # Panel de información y botones
+        return table_panel
+    
+    def create_info_buttons_panel(self):
+        """Crear el panel de información y botones"""
         info_buttons_panel = ContentPanel()
         info_buttons_layout = QHBoxLayout(info_buttons_panel)
         
@@ -229,40 +310,46 @@ class HistorialAccesoWindow(QWidget):
         btn_volver.setMaximumWidth(200)
         info_buttons_layout.addWidget(btn_volver)
         
-        content_layout.addWidget(info_buttons_panel)
-        layout.addWidget(content)
+        return info_buttons_panel
+    
+    def setup_update_timer(self):
+        """Configurar el timer para actualizar tiempos en tiempo real"""
+        self.update_timer = QTimer(self)
+        self.update_timer.timeout.connect(self.actualizar_tiempos)
+        self.update_timer.start(60000)  # Actualizar cada minuto
     
     def cargar_accesos(self):
-        """Cargar todos los accesos desde Supabase"""
+        """Cargar todos los accesos desde Supabase de forma asíncrona"""
         try:
-            if self.supabase_service and self.supabase_service.is_connected:
-                # Consultar registro_entradas desde Supabase con relaciones
-                response = self.supabase_service.client.table('registro_entradas')\
-                    .select('''
-                        *,
-                        miembros(
-                            nombres,
-                            apellido_paterno,
-                            apellido_materno,
-                            codigo_qr
-                        ),
-                        personal(
-                            nombres,
-                            apellido_paterno,
-                            apellido_materno,
-                            id_personal,
-                            numero_empleado
-                        )
-                    ''')\
-                    .order('fecha_entrada', desc=True)\
-                    .execute()
-                
-                rows = response.data if response.data else []
-            else:
-                logging.warning("No hay conexión a Supabase")
-                rows = []
+            # Mostrar indicador de carga
+            self.info_label.setText("Cargando accesos...")
+            self.accesos_table.setRowCount(0)
             
+            # Detener hilo anterior si existe
+            if self.loader_thread and self.loader_thread.isRunning():
+                self.loader_thread.terminate()
+                self.loader_thread.wait()
+            
+            # Crear y ejecutar hilo de carga
+            self.loader_thread = AccesosLoaderThread(self.supabase_service)
+            self.loader_thread.accesos_loaded.connect(self.procesar_datos_accesos)
+            self.loader_thread.error_occurred.connect(self.mostrar_error_carga)
+            self.loader_thread.start()
+            
+        except Exception as e:
+            logging.error(f"Error iniciando carga de accesos: {e}")
+            show_error_dialog(
+                self,
+                "Error al cargar",
+                "No se pudieron cargar los accesos",
+                detail=str(e)
+            )
+    
+    def procesar_datos_accesos(self, rows):
+        """Procesar los datos de accesos cargados desde Supabase"""
+        try:
             self.accesos_data = []
+            
             for row in rows:
                 # Determinar nombre completo según tipo de acceso
                 tipo_acceso = row.get('tipo_acceso', '')
@@ -281,9 +368,14 @@ class HistorialAccesoWindow(QWidget):
                     nombre_completo = row.get('nombre_visitante', 'Visitante')
                     codigo = 'N/A'
                 
-                # Formatear fechas
+                # Procesar fechas
                 fecha_entrada = row.get('fecha_entrada')
+                if isinstance(fecha_entrada, str):
+                    fecha_entrada = datetime.fromisoformat(fecha_entrada.replace('Z', '+00:00'))
+                
                 fecha_salida = row.get('fecha_salida')
+                if isinstance(fecha_salida, str):
+                    fecha_salida = datetime.fromisoformat(fecha_salida.replace('Z', '+00:00'))
                 
                 self.accesos_data.append({
                     'id_entrada': row.get('id_entrada'),
@@ -301,13 +393,24 @@ class HistorialAccesoWindow(QWidget):
             logging.info(f"Accesos cargados: {len(self.accesos_data)}")
             
         except Exception as e:
-            logging.error(f"Error cargando accesos: {e}")
+            logging.error(f"Error procesando datos de accesos: {e}")
             show_error_dialog(
                 self,
-                "Error al cargar",
-                "No se pudieron cargar los registros de acceso",
+                "Error al procesar datos",
+                "No se pudieron procesar los datos de accesos",
                 detail=str(e)
             )
+    
+    def mostrar_error_carga(self, error_msg):
+        """Mostrar mensaje de error al cargar accesos"""
+        logging.error(f"Error cargando accesos: {error_msg}")
+        show_error_dialog(
+            self,
+            "Error al cargar",
+            "No se pudieron cargar los accesos",
+            detail=error_msg
+        )
+        self.info_label.setText("Error al cargar accesos")
     
     def aplicar_filtros(self):
         """Aplicar todos los filtros activos"""
@@ -320,7 +423,7 @@ class HistorialAccesoWindow(QWidget):
             fecha_hasta = self.fecha_fin.date().toPython()
             
             # Filtrar datos
-            accesos_filtrados = []
+            self.accesos_filtrados = []
             for acceso in self.accesos_data:
                 # Filtro de texto
                 if texto_busqueda:
@@ -349,9 +452,9 @@ class HistorialAccesoWindow(QWidget):
                 if not (fecha_desde <= fecha_acc <= fecha_hasta):
                     continue
                 
-                accesos_filtrados.append(acceso)
+                self.accesos_filtrados.append(acceso)
             
-            self.mostrar_accesos(accesos_filtrados)
+            self.mostrar_accesos(self.accesos_filtrados)
             
         except Exception as e:
             logging.error(f"Error aplicando filtros: {e}")
@@ -414,26 +517,7 @@ class HistorialAccesoWindow(QWidget):
                 self.accesos_table.setItem(row, 5, item_area)
                 
                 # Tiempo de permanencia
-                if acceso['fecha_salida']:
-                    try:
-                        delta = acceso['fecha_salida'] - acceso['fecha_entrada']
-                        horas = delta.seconds // 3600
-                        minutos = (delta.seconds % 3600) // 60
-                        tiempo_str = f"{horas}h {minutos}m"
-                    except:
-                        tiempo_str = "-"
-                else:
-                    # Calcular tiempo desde entrada hasta ahora
-                    try:
-                        ahora = datetime.now()
-                        delta = ahora - acceso['fecha_entrada']
-                        horas = delta.seconds // 3600
-                        minutos = (delta.seconds % 3600) // 60
-                        tiempo_str = f"{horas}h {minutos}m"
-                    except:
-                        tiempo_str = "-"
-                
-                item_tiempo = QTableWidgetItem(tiempo_str)
+                item_tiempo = QTableWidgetItem("-")
                 item_tiempo.setTextAlignment(Qt.AlignCenter)
                 self.accesos_table.setItem(row, 6, item_tiempo)
                 
@@ -465,6 +549,52 @@ class HistorialAccesoWindow(QWidget):
                 "No se pudieron mostrar los accesos",
                 detail=str(e)
             )
+    
+    def actualizar_tiempos(self):
+        """Actualizar los tiempos de permanencia para quienes aún están dentro"""
+        try:
+            # Solo actualizar si hay accesos mostrados
+            if self.accesos_table.rowCount() == 0:
+                return
+                
+            ahora = datetime.now()
+            
+            # Recorrer todas las filas de la tabla
+            for row in range(self.accesos_table.rowCount()):
+                # Obtener el item de la columna de fecha de salida
+                item_salida = self.accesos_table.item(row, 1)
+                
+                # Si está "DENTRO", actualizar el tiempo
+                if item_salida and item_salida.text() == "DENTRO":
+                    # Obtener la fecha de entrada
+                    item_entrada = self.accesos_table.item(row, 0)
+                    if item_entrada:
+                        try:
+                            # Extraer la fecha de entrada del texto
+                            fecha_entrada_str = item_entrada.text()
+                            fecha_entrada = datetime.strptime(fecha_entrada_str, "%d/%m/%Y %H:%M")
+                            
+                            # Calcular tiempo transcurrido
+                            delta = ahora - fecha_entrada
+                            horas = delta.seconds // 3600
+                            minutos = (delta.seconds % 3600) // 60
+                            
+                            # Si ha pasado más de un día, mostrar días también
+                            if delta.days > 0:
+                                tiempo_str = f"{delta.days}d {horas}h {minutos}m"
+                            else:
+                                tiempo_str = f"{horas}h {minutos}m"
+                            
+                            # Actualizar el item de tiempo
+                            item_tiempo = self.accesos_table.item(row, 6)
+                            if item_tiempo:
+                                item_tiempo.setText(tiempo_str)
+                        except Exception as e:
+                            logging.warning(f"Error actualizando tiempo en fila {row}: {e}")
+                            continue
+            
+        except Exception as e:
+            logging.error(f"Error actualizando tiempos: {e}")
     
     def limpiar_filtros(self):
         """Limpiar todos los filtros y mostrar todo"""
@@ -602,3 +732,16 @@ class HistorialAccesoWindow(QWidget):
                 "No se pudo generar el archivo Excel",
                 detail=str(e)
             )
+    
+    def closeEvent(self, event):
+        """Evento al cerrar la ventana"""
+        # Detener hilo de carga si está activo
+        if self.loader_thread and self.loader_thread.isRunning():
+            self.loader_thread.terminate()
+            self.loader_thread.wait()
+        
+        # Detener timer de actualización
+        if self.update_timer:
+            self.update_timer.stop()
+            
+        super().closeEvent(event)

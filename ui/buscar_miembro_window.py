@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QHeaderView, QLineEdit, QSizePolicy, QFrame,
     QLabel, QDialog, QGridLayout, QCheckBox
 )
-from PySide6.QtCore import Qt, Signal, QDate
+from PySide6.QtCore import Qt, Signal, QDate, QThread  # Eliminado pyqtSignal
 from PySide6.QtGui import QFont
 from datetime import datetime, date, timedelta
 import logging
@@ -45,8 +45,9 @@ class DetalleMiembroDialog(QDialog):
         layout.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
         
         # Título
+        nombre_completo = f"{self.miembro_data.get('nombres', '')} {self.miembro_data.get('apellido_paterno', '')} {self.miembro_data.get('apellido_materno', '')}".strip()
         titulo = StyledLabel(
-            f"{self.miembro_data['nombres']} {self.miembro_data['apellidos']}",
+            nombre_completo,
             bold=True,
             size=WindowsPhoneTheme.FONT_SIZE_TITLE
         )
@@ -148,6 +149,42 @@ class DetalleMiembroDialog(QDialog):
             layout.addWidget(value_label, row, 1)
 
 
+class MiembrosLoaderThread(QThread):
+    """Hilo para cargar miembros de forma asíncrona"""
+    
+    miembros_loaded = Signal(list)  # Cambiado de pyqtSignal a Signal
+    error_occurred = Signal(str)   # Cambiado de pyqtSignal a Signal
+    
+    def __init__(self, supabase_service):
+        super().__init__()
+        self.supabase_service = supabase_service
+    
+    def run(self):
+        """Cargar miembros desde Supabase en un hilo separado"""
+        try:
+            if self.supabase_service and self.supabase_service.is_connected:
+                response = self.supabase_service.client.table('miembros')\
+                    .select('''
+                        *,
+                        asignaciones_activas(
+                            fecha_fin,
+                            activa,
+                            cancelada,
+                            ca_productos_digitales(nombre),
+                            lockers(numero)
+                        )
+                    ''')\
+                    .order('nombres')\
+                    .execute()
+                
+                rows = response.data if response.data else []
+                self.miembros_loaded.emit(rows)
+            else:
+                self.error_occurred.emit("No hay conexión a Supabase")
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+
+
 class BuscarMiembroWindow(QWidget):
     """Widget para buscar y gestionar miembros"""
     
@@ -159,6 +196,8 @@ class BuscarMiembroWindow(QWidget):
         self.supabase_service = supabase_service
         self.user_data = user_data
         self.miembros_data = []
+        self.miembros_filtrados = []
+        self.loader_thread = None
         
         self.setup_ui()
         self.cargar_miembros()
@@ -261,30 +300,38 @@ class BuscarMiembroWindow(QWidget):
         layout.addWidget(content)
     
     def cargar_miembros(self):
-        """Cargar todos los miembros desde Supabase"""
+        """Cargar todos los miembros desde Supabase de forma asíncrona"""
         try:
-            # Consultar miembros desde Supabase con PostgreSQL
-            if self.supabase_service and self.supabase_service.is_connected:
-                response = self.supabase_service.client.table('miembros')\
-                    .select('''
-                        *,
-                        asignaciones_activas(
-                            fecha_fin,
-                            activa,
-                            cancelada,
-                            ca_productos_digitales(nombre),
-                            lockers(numero)
-                        )
-                    ''')\
-                    .order('nombres')\
-                    .execute()
-                
-                rows = response.data if response.data else []
-            else:
-                logging.warning("No hay conexión a Supabase, usando base de datos local")
-                rows = []
+            # Mostrar indicador de carga
+            self.info_label.setText("Cargando miembros...")
+            self.miembros_table.setRowCount(0)
             
+            # Detener hilo anterior si existe
+            if self.loader_thread and self.loader_thread.isRunning():
+                self.loader_thread.terminate()
+                self.loader_thread.wait()
+            
+            # Crear y ejecutar hilo de carga
+            self.loader_thread = MiembrosLoaderThread(self.supabase_service)
+            self.loader_thread.miembros_loaded.connect(self.procesar_datos_miembros)
+            self.loader_thread.error_occurred.connect(self.mostrar_error_carga)
+            self.loader_thread.start()
+            
+        except Exception as e:
+            logging.error(f"Error iniciando carga de miembros: {e}")
+            show_error_dialog(
+                self,
+                "Error al cargar",
+                "No se pudieron cargar los miembros",
+                detail=str(e)
+            )
+    
+    def procesar_datos_miembros(self, rows):
+        """Procesar los datos de miembros cargados desde Supabase"""
+        try:
             self.miembros_data = []
+            hoy = datetime.now().date()
+            
             for row in rows:
                 # Procesar fecha de nacimiento
                 fecha_nacimiento = row.get('fecha_nacimiento')
@@ -316,7 +363,6 @@ class BuscarMiembroWindow(QWidget):
                             fecha_fin_str = fecha_fin.strftime('%d/%m/%Y')
                             
                             # Calcular estado de vigencia
-                            hoy = datetime.now().date()
                             if fecha_fin < hoy:
                                 estado_vigencia = 'vencida'
                                 estado_membresia = 'Vencida'
@@ -356,13 +402,24 @@ class BuscarMiembroWindow(QWidget):
             logging.info(f"Miembros cargados desde Supabase: {len(self.miembros_data)}")
             
         except Exception as e:
-            logging.error(f"Error cargando miembros: {e}")
+            logging.error(f"Error procesando datos de miembros: {e}")
             show_error_dialog(
                 self,
-                "Error al cargar",
-                "No se pudieron cargar los miembros",
+                "Error al procesar datos",
+                "No se pudieron procesar los datos de los miembros",
                 detail=str(e)
             )
+    
+    def mostrar_error_carga(self, error_msg):
+        """Mostrar mensaje de error al cargar miembros"""
+        logging.error(f"Error cargando miembros: {error_msg}")
+        show_error_dialog(
+            self,
+            "Error al cargar",
+            "No se pudieron cargar los miembros",
+            detail=error_msg
+        )
+        self.info_label.setText("Error al cargar miembros")
     
     def aplicar_filtros(self):
         """Aplicar todos los filtros activos"""
@@ -373,7 +430,7 @@ class BuscarMiembroWindow(QWidget):
             membresia_vigente = self.check_membresia_vigente.isChecked()
             
             # Filtrar datos
-            miembros_filtrados = []
+            self.miembros_filtrados = []
             for miembro in self.miembros_data:
                 # Filtro de texto
                 if texto_busqueda:
@@ -393,9 +450,9 @@ class BuscarMiembroWindow(QWidget):
                 if membresia_vigente and miembro['estado_vigencia'] not in ['vigente', 'por_vencer']:
                     continue
                 
-                miembros_filtrados.append(miembro)
+                self.miembros_filtrados.append(miembro)
             
-            self.mostrar_miembros(miembros_filtrados)
+            self.mostrar_miembros(self.miembros_filtrados)
             
         except Exception as e:
             logging.error(f"Error aplicando filtros: {e}")
@@ -505,9 +562,9 @@ class BuscarMiembroWindow(QWidget):
             row = self.miembros_table.currentRow()
             codigo_miembro = self.miembros_table.item(row, 0).text()
             
-            # Buscar el miembro en los datos
+            # Buscar el miembro en los datos filtrados
             miembro_seleccionado = None
-            for miembro in self.miembros_data:
+            for miembro in self.miembros_filtrados:
                 if miembro['codigo_miembro'] == codigo_miembro:
                     miembro_seleccionado = miembro
                     break
@@ -524,3 +581,12 @@ class BuscarMiembroWindow(QWidget):
                 "No se pudo mostrar el detalle del miembro",
                 detail=str(e)
             )
+    
+    def closeEvent(self, event):
+        """Evento al cerrar la ventana"""
+        # Detener hilo de carga si está activo
+        if self.loader_thread and self.loader_thread.isRunning():
+            self.loader_thread.terminate()
+            self.loader_thread.wait()
+            
+        super().closeEvent(event)
