@@ -10,6 +10,7 @@ import logging
 import bcrypt
 from datetime import datetime
 from typing import Dict, List, Optional, Any
+from decimal import Decimal
 
 # Configurar logging
 logging.basicConfig(
@@ -813,6 +814,725 @@ class PostgresManager:
             except Exception:
                 pass
             logging.error(f"Error creando inventario: {e}")
+            return False
+    
+    # ========== UBICACIONES ==========
+    
+    def get_ubicaciones(self) -> List[Dict]:
+        """Obtener todas las ubicaciones activas"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id_ubicacion, nombre, descripcion, activa
+                    FROM ca_ubicaciones
+                    WHERE activa = TRUE
+                    ORDER BY nombre
+                """)
+                return cursor.fetchall()
+        except Exception as e:
+            logging.error(f"Error obteniendo ubicaciones: {e}")
+            return []
+    
+    def get_ubicacion_by_id(self, id_ubicacion: int) -> Optional[Dict]:
+        """Obtener una ubicación por ID"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id_ubicacion, nombre, descripcion, activa
+                    FROM ca_ubicaciones
+                    WHERE id_ubicacion = %s
+                """, (id_ubicacion,))
+                return cursor.fetchone()
+        except Exception as e:
+            logging.error(f"Error obteniendo ubicación: {e}")
+            return None
+    
+    # ========== PRODUCTOS DIGITALES ==========
+    
+    def get_productos_digitales(self) -> List[Dict]:
+        """Obtener todos los productos digitales activos"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        id_producto_digital, codigo_interno, nombre, descripcion,
+                        tipo, precio_venta, duracion_dias, aplica_domingo,
+                        aplica_festivo, es_unico, requiere_asignacion, activo
+                    FROM ca_productos_digitales
+                    WHERE activo = TRUE
+                    ORDER BY nombre
+                """)
+                return cursor.fetchall()
+        except Exception as e:
+            logging.error(f"Error obteniendo productos digitales: {e}")
+            return []
+    
+    def get_producto_digital_by_id(self, id_producto_digital: int) -> Optional[Dict]:
+        """Obtener producto digital por ID"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        id_producto_digital, codigo_interno, nombre, descripcion,
+                        tipo, precio_venta, duracion_dias, aplica_domingo,
+                        aplica_festivo, es_unico, requiere_asignacion, activo
+                    FROM ca_productos_digitales
+                    WHERE id_producto_digital = %s
+                """, (id_producto_digital,))
+                return cursor.fetchone()
+        except Exception as e:
+            logging.error(f"Error obteniendo producto digital: {e}")
+            return None
+    
+    def insertar_producto_digital(self, producto_data: Dict) -> Optional[int]:
+        """
+        Insertar un nuevo producto digital.
+        
+        Args:
+            producto_data: {
+                'codigo_interno': str,
+                'nombre': str,
+                'descripcion': str (opcional),
+                'tipo': str ('membresia_gym', 'recargo_dia', etc),
+                'precio_venta': Decimal,
+                'duracion_dias': int (opcional),
+                'aplica_domingo': bool,
+                'aplica_festivo': bool,
+                'es_unico': bool,
+                'requiere_asignacion': bool
+            }
+        """
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO ca_productos_digitales (
+                        codigo_interno, nombre, descripcion, tipo,
+                        precio_venta, duracion_dias, aplica_domingo,
+                        aplica_festivo, es_unico, requiere_asignacion, activo
+                    ) VALUES (
+                        %s, %s, %s, %s::tipo_producto_digital, %s, %s, %s, %s, %s, %s, TRUE
+                    )
+                    RETURNING id_producto_digital
+                """, (
+                    producto_data['codigo_interno'],
+                    producto_data['nombre'],
+                    producto_data.get('descripcion'),
+                    producto_data['tipo'],
+                    producto_data.get('precio_venta', 0),
+                    producto_data.get('duracion_dias'),
+                    producto_data.get('aplica_domingo', False),
+                    producto_data.get('aplica_festivo', False),
+                    producto_data.get('es_unico', False),
+                    producto_data.get('requiere_asignacion', False)
+                ))
+                
+                id_producto = cursor.fetchone()['id_producto_digital']
+                self.connection.commit()
+                logging.info(f"Producto digital '{producto_data['nombre']}' creado con ID: {id_producto}")
+                return id_producto
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error insertando producto digital: {e}")
+            return None
+    
+    # ========== LOCKERS ==========
+    
+    def get_lockers(self) -> List[Dict]:
+        """Obtener todos los lockers activos"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id_locker, numero, ubicacion, tipo, requiere_llave, activo
+                    FROM lockers
+                    WHERE activo = TRUE
+                    ORDER BY numero
+                """)
+                return cursor.fetchall()
+        except Exception as e:
+            logging.error(f"Error obteniendo lockers: {e}")
+            return []
+    
+    def get_locker_by_id(self, id_locker: int) -> Optional[Dict]:
+        """Obtener locker por ID"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id_locker, numero, ubicacion, tipo, requiere_llave, activo
+                    FROM lockers
+                    WHERE id_locker = %s
+                """, (id_locker,))
+                return cursor.fetchone()
+        except Exception as e:
+            logging.error(f"Error obteniendo locker: {e}")
+            return None
+    
+    def insertar_locker(self, locker_data: Dict) -> Optional[int]:
+        """
+        Insertar un nuevo locker.
+        
+        Args:
+            locker_data: {
+                'numero': str,
+                'ubicacion': str,
+                'tipo': str (default: 'estándar'),
+                'requiere_llave': bool
+            }
+        """
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO lockers (numero, ubicacion, tipo, requiere_llave, activo)
+                    VALUES (%s, %s, %s::tipo_locker, %s, TRUE)
+                    RETURNING id_locker
+                """, (
+                    locker_data['numero'],
+                    locker_data.get('ubicacion', 'Zona Lockers'),
+                    locker_data.get('tipo', 'estándar'),
+                    locker_data.get('requiere_llave', True)
+                ))
+                
+                id_locker = cursor.fetchone()['id_locker']
+                self.connection.commit()
+                logging.info(f"Locker '{locker_data['numero']}' creado con ID: {id_locker}")
+                return id_locker
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error insertando locker: {e}")
+            return None
+    
+    # ========== ASIGNACIONES ACTIVAS ==========
+    
+    def crear_asignacion_activa(self, asignacion_data: Dict) -> Optional[int]:
+        """
+        Crear una asignación activa (membresía o locker).
+        
+        Args:
+            asignacion_data: {
+                'id_miembro': int,
+                'id_producto_digital': int,
+                'id_venta': int (opcional),
+                'id_locker': int (opcional),
+                'fecha_inicio': str (YYYY-MM-DD),
+                'fecha_fin': str (YYYY-MM-DD),
+                'estado': str (default: 'activa')
+            }
+        """
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO asignaciones_activas (
+                        id_miembro, id_producto_digital, id_venta, id_locker,
+                        activa, cancelada, fecha_inicio, fecha_fin, estado
+                    ) VALUES (
+                        %s, %s, %s, %s, TRUE, FALSE, %s, %s, %s
+                    )
+                    RETURNING id_asignacion
+                """, (
+                    asignacion_data['id_miembro'],
+                    asignacion_data['id_producto_digital'],
+                    asignacion_data.get('id_venta'),
+                    asignacion_data.get('id_locker'),
+                    asignacion_data['fecha_inicio'],
+                    asignacion_data['fecha_fin'],
+                    asignacion_data.get('estado', 'activa')
+                ))
+                
+                id_asignacion = cursor.fetchone()['id_asignacion']
+                self.connection.commit()
+                logging.info(f"Asignación activa creada con ID: {id_asignacion}")
+                return id_asignacion
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error creando asignación activa: {e}")
+            return None
+    
+    def get_asignaciones_activas_por_miembro(self, id_miembro: int) -> List[Dict]:
+        """Obtener asignaciones activas de un miembro"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        id_asignacion, id_miembro, id_producto_digital, id_venta,
+                        id_locker, activa, cancelada, fecha_inicio, fecha_fin,
+                        estado, fecha_cancelacion
+                    FROM asignaciones_activas
+                    WHERE id_miembro = %s AND activa = TRUE
+                    ORDER BY fecha_inicio DESC
+                """, (id_miembro,))
+                return cursor.fetchall()
+        except Exception as e:
+            logging.error(f"Error obteniendo asignaciones activas: {e}")
+            return []
+    
+    def cancelar_asignacion(self, id_asignacion: int) -> bool:
+        """Cancelar una asignación activa"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE asignaciones_activas
+                    SET activa = FALSE, cancelada = TRUE, 
+                        estado = 'cancelada', fecha_cancelacion = CURRENT_DATE
+                    WHERE id_asignacion = %s
+                """, (id_asignacion,))
+                
+                self.connection.commit()
+                logging.info(f"Asignación {id_asignacion} cancelada")
+                return True
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error cancelando asignación: {e}")
+            return False
+    
+    # ========== REGISTRO DE ENTRADAS ==========
+    
+    def registrar_entrada(self, entrada_data: Dict) -> Optional[int]:
+        """
+        Registrar una entrada al gimnasio.
+        
+        Args:
+            entrada_data: {
+                'id_miembro': int (opcional),
+                'id_personal': int (opcional),
+                'nombre_visitante': str (opcional),
+                'tipo_acceso': str ('miembro', 'personal', 'visitante'),
+                'area_accedida': str (default: 'General'),
+                'dispositivo_registro': str (opcional),
+                'notas': str (opcional),
+                'autorizado_por': str (opcional),
+                'id_venta_acceso': int (opcional)
+            }
+        """
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO registro_entradas (
+                        id_miembro, id_personal, nombre_visitante, tipo_acceso,
+                        area_accedida, dispositivo_registro, notas, autorizado_por,
+                        id_venta_acceso, fecha_entrada
+                    ) VALUES (
+                        %s, %s, %s, %s::tipo_acceso_registro, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP
+                    )
+                    RETURNING id_entrada
+                """, (
+                    entrada_data.get('id_miembro'),
+                    entrada_data.get('id_personal'),
+                    entrada_data.get('nombre_visitante'),
+                    entrada_data['tipo_acceso'],
+                    entrada_data.get('area_accedida', 'General'),
+                    entrada_data.get('dispositivo_registro'),
+                    entrada_data.get('notas'),
+                    entrada_data.get('autorizado_por'),
+                    entrada_data.get('id_venta_acceso')
+                ))
+                
+                id_entrada = cursor.fetchone()['id_entrada']
+                self.connection.commit()
+                logging.info(f"Entrada registrada con ID: {id_entrada}")
+                return id_entrada
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error registrando entrada: {e}")
+            return None
+    
+    def registrar_salida(self, id_entrada: int) -> bool:
+        """Registrar la salida de una persona"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE registro_entradas
+                    SET fecha_salida = CURRENT_TIMESTAMP
+                    WHERE id_entrada = %s
+                """, (id_entrada,))
+                
+                self.connection.commit()
+                logging.info(f"Salida registrada para entrada {id_entrada}")
+                return True
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error registrando salida: {e}")
+            return False
+    
+    def get_historial_entradas(self, id_miembro: int, limite: int = 50) -> List[Dict]:
+        """Obtener historial de entradas de un miembro"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        id_entrada, id_miembro, fecha_entrada, fecha_salida,
+                        area_accedida, notas
+                    FROM registro_entradas
+                    WHERE id_miembro = %s
+                    ORDER BY fecha_entrada DESC
+                    LIMIT %s
+                """, (id_miembro, limite))
+                return cursor.fetchall()
+        except Exception as e:
+            logging.error(f"Error obteniendo historial de entradas: {e}")
+            return []
+    
+    # ========== VENTAS DIGITALES (APP) ==========
+    
+    def crear_venta_digital(self, venta_data: Dict) -> Optional[int]:
+        """
+        Crear una venta digital desde la app.
+        
+        Args:
+            venta_data: {
+                'id_miembro': int,
+                'id_producto_digital': int,
+                'fecha_inicio': str (YYYY-MM-DD),
+                'fecha_fin': str (YYYY-MM-DD),
+                'monto': Decimal,
+                'metodo_pago': str ('efectivo', 'tarjeta_debito', 'tarjeta_credito'),
+                'referencia_pago': str (opcional),
+                'id_locker': int (opcional),
+                'id_usuario': int (opcional)
+            }
+        """
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO ventas_digitales (
+                        id_miembro, id_producto_digital, id_locker, id_usuario,
+                        fecha_compra, monto, metodo_pago, referencia_pago,
+                        estado, fecha_inicio, fecha_fin
+                    ) VALUES (
+                        %s, %s, %s, %s, CURRENT_TIMESTAMP, %s,
+                        %s::tipo_metodo_pago, %s, %s::tipo_estado_venta_digital,
+                        %s, %s
+                    )
+                    RETURNING id_venta_digital
+                """, (
+                    venta_data['id_miembro'],
+                    venta_data['id_producto_digital'],
+                    venta_data.get('id_locker'),
+                    venta_data.get('id_usuario'),
+                    venta_data['monto'],
+                    venta_data.get('metodo_pago', 'efectivo'),
+                    venta_data.get('referencia_pago'),
+                    venta_data.get('estado', 'pendiente_pago'),
+                    venta_data['fecha_inicio'],
+                    venta_data['fecha_fin']
+                ))
+                
+                id_venta = cursor.fetchone()['id_venta_digital']
+                self.connection.commit()
+                logging.info(f"Venta digital creada con ID: {id_venta}")
+                return id_venta
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error creando venta digital: {e}")
+            return None
+    
+    def get_ventas_digitales_por_miembro(self, id_miembro: int) -> List[Dict]:
+        """Obtener ventas digitales de un miembro"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        id_venta_digital, id_miembro, id_producto_digital,
+                        id_locker, fecha_compra, monto, metodo_pago,
+                        estado, fecha_inicio, fecha_fin
+                    FROM ventas_digitales
+                    WHERE id_miembro = %s
+                    ORDER BY fecha_compra DESC
+                """, (id_miembro,))
+                return cursor.fetchall()
+        except Exception as e:
+            logging.error(f"Error obteniendo ventas digitales: {e}")
+            return []
+    
+    def actualizar_estado_venta_digital(self, id_venta_digital: int, nuevo_estado: str) -> bool:
+        """Actualizar el estado de una venta digital"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE ventas_digitales
+                    SET estado = %s::tipo_estado_venta_digital
+                    WHERE id_venta_digital = %s
+                """, (nuevo_estado, id_venta_digital))
+                
+                self.connection.commit()
+                logging.info(f"Venta digital {id_venta_digital} actualizada a estado: {nuevo_estado}")
+                return True
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error actualizando venta digital: {e}")
+            return False
+    
+    # ========== NOTIFICACIONES DE PAGO ==========
+    
+    def crear_notificacion_pago(self, notif_data: Dict) -> Optional[int]:
+        """
+        Crear una notificación de pago.
+        
+        Args:
+            notif_data: {
+                'id_miembro': int,
+                'id_venta_digital': int (opcional),
+                'tipo_notificacion': str,
+                'asunto': str,
+                'descripcion': str (opcional),
+                'monto_pendiente': Decimal (opcional),
+                'fecha_vencimiento': str (YYYY-MM-DD, opcional),
+                'para_miembro': bool,
+                'para_recepcion': bool,
+                'qr_pago_generado': str (opcional)
+            }
+        """
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO notificaciones_pago (
+                        id_miembro, id_venta_digital, tipo_notificacion, asunto,
+                        descripcion, monto_pendiente, fecha_vencimiento,
+                        para_miembro, para_recepcion, qr_pago_generado, leida, respondida
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE, FALSE
+                    )
+                    RETURNING id_notificacion
+                """, (
+                    notif_data['id_miembro'],
+                    notif_data.get('id_venta_digital'),
+                    notif_data['tipo_notificacion'],
+                    notif_data['asunto'],
+                    notif_data.get('descripcion'),
+                    notif_data.get('monto_pendiente'),
+                    notif_data.get('fecha_vencimiento'),
+                    notif_data.get('para_miembro', True),
+                    notif_data.get('para_recepcion', True),
+                    notif_data.get('qr_pago_generado')
+                ))
+                
+                id_notif = cursor.fetchone()['id_notificacion']
+                self.connection.commit()
+                logging.info(f"Notificación de pago creada con ID: {id_notif}")
+                return id_notif
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error creando notificación de pago: {e}")
+            return None
+    
+    def get_notificaciones_pendientes(self, para_recepcion: bool = True) -> List[Dict]:
+        """Obtener notificaciones de pago pendientes"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        id_notificacion, id_miembro, id_venta_digital,
+                        tipo_notificacion, asunto, descripcion, monto_pendiente,
+                        fecha_vencimiento, qr_pago_generado, leida, respondida,
+                        creada_en
+                    FROM notificaciones_pago
+                    WHERE leida = FALSE AND respondida = FALSE
+                        AND (%s = FALSE OR para_recepcion = TRUE)
+                    ORDER BY creada_en DESC
+                """, (not para_recepcion,))
+                return cursor.fetchall()
+        except Exception as e:
+            logging.error(f"Error obteniendo notificaciones pendientes: {e}")
+            return []
+    
+    def marcar_notificacion_como_leida(self, id_notificacion: int) -> bool:
+        """Marcar una notificación como leída"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE notificaciones_pago
+                    SET leida = TRUE
+                    WHERE id_notificacion = %s
+                """, (id_notificacion,))
+                
+                self.connection.commit()
+                logging.info(f"Notificación {id_notificacion} marcada como leída")
+                return True
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error marcando notificación como leída: {e}")
+            return False
+    
+    # ========== TURNOS DE CAJA ==========
+    
+    def abrir_turno_caja(self, id_usuario: int, monto_inicial: Decimal = 0) -> Optional[int]:
+        """Abrir un nuevo turno de caja"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO turnos_caja (
+                        id_usuario, monto_inicial, cerrado
+                    ) VALUES (
+                        %s, %s, FALSE
+                    )
+                    RETURNING id_turno
+                """, (id_usuario, monto_inicial))
+                
+                id_turno = cursor.fetchone()['id_turno']
+                self.connection.commit()
+                logging.info(f"Turno de caja abierto con ID: {id_turno} para usuario {id_usuario}")
+                return id_turno
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error abriendo turno de caja: {e}")
+            return None
+    
+    def get_turno_activo(self, id_usuario: int) -> Optional[Dict]:
+        """Obtener el turno activo de un usuario"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        id_turno, id_usuario, fecha_apertura, monto_inicial,
+                        total_ventas_efectivo, monto_esperado, cerrado
+                    FROM turnos_caja
+                    WHERE id_usuario = %s AND cerrado = FALSE
+                    ORDER BY fecha_apertura DESC
+                    LIMIT 1
+                """, (id_usuario,))
+                return cursor.fetchone()
+        except Exception as e:
+            logging.error(f"Error obteniendo turno activo: {e}")
+            return None
+    
+    def cerrar_turno_caja(self, id_turno: int, monto_real_cierre: Decimal) -> bool:
+        """Cerrar un turno de caja"""
+        try:
+            if not self.connection or self.connection.closed:
+                self.connect()
+            
+            with self.connection.cursor() as cursor:
+                # Obtener datos del turno
+                cursor.execute("""
+                    SELECT monto_inicial, total_ventas_efectivo, monto_esperado
+                    FROM turnos_caja
+                    WHERE id_turno = %s AND cerrado = FALSE
+                """, (id_turno,))
+                
+                turno = cursor.fetchone()
+                if not turno:
+                    logging.warning(f"Turno {id_turno} no encontrado o ya cerrado")
+                    return False
+                
+                diferencia = monto_real_cierre - turno['monto_esperado']
+                
+                cursor.execute("""
+                    UPDATE turnos_caja
+                    SET 
+                        fecha_cierre = CURRENT_TIMESTAMP,
+                        monto_real_cierre = %s,
+                        diferencia = %s,
+                        cerrado = TRUE,
+                        actualizado_en = CURRENT_TIMESTAMP
+                    WHERE id_turno = %s
+                """, (monto_real_cierre, diferencia, id_turno))
+                
+                self.connection.commit()
+                logging.info(f"Turno {id_turno} cerrado. Diferencia: ${diferencia:.2f}")
+                return True
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except:
+                pass
+            logging.error(f"Error cerrando turno de caja: {e}")
             return False
 
 
