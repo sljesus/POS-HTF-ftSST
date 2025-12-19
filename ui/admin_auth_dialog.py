@@ -177,35 +177,29 @@ class AdminAuthDialog(QDialog):
             return
         
         try:
-            with self.pg_manager.connection.cursor() as cursor:
-                # Buscar usuario y verificar que sea administrador
-                cursor.execute("""
-                    SELECT id_usuario, contrasenia, rol, nombre_completo
-                    FROM usuarios
-                    WHERE nombre_usuario = %s AND activo = TRUE
-                """, (usuario,))
-                
-                user = cursor.fetchone()
-                
-                if not user:
-                    from ui.components import show_error_dialog
-                    show_error_dialog(self, "Error", "Usuario no encontrado o inactivo")
-                    self.password_input.clear()
-                    self.usuario_input.setFocus()
-                    return
-                
-                # Verificar que sea administrador o sistemas
-                if user['rol'] not in ['administrador', 'sistemas']:
-                    from ui.components import show_error_dialog
-                    show_error_dialog(
-                        self, 
-                        "Acceso Denegado", 
-                        "Solo administradores pueden autorizar esta acción"
-                    )
-                    self.password_input.clear()
-                    self.usuario_input.clear()
-                    self.usuario_input.setFocus()
-                    return
+            # Buscar usuario y verificar que sea administrador
+            response = self.pg_manager.client.table('usuarios').select('id_usuario, contrasenia, rol, nombre_completo').eq('nombre_usuario', usuario).eq('activo', True).execute()
+            user = response.data[0] if response.data else None
+            
+            if not user:
+                from ui.components import show_error_dialog
+                show_error_dialog(self, "Error", "Usuario no encontrado o inactivo")
+                self.password_input.clear()
+                self.usuario_input.setFocus()
+                return
+            
+            # Verificar que sea administrador o sistemas
+            if user['rol'] not in ['administrador', 'sistemas']:
+                from ui.components import show_error_dialog
+                show_error_dialog(
+                    self, 
+                    "Acceso Denegado", 
+                    "Solo administradores pueden autorizar esta acción"
+                )
+                self.password_input.clear()
+                self.usuario_input.clear()
+                self.usuario_input.setFocus()
+                return
                 
                 # Verificar contraseña
                 password_hash = user['contrasenia'].encode('utf-8')

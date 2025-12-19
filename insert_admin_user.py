@@ -24,9 +24,9 @@ def insert_admin_user():
     try:
         # Configuración de la conexión a PostgreSQL
         connection = psycopg2.connect(
-            host="localhost",
+            host="192.168.100.4",
             port=5432,
-            database="HTF_DB",
+            database="htf_db",
             user="postgres",
             password="postgres"
         )

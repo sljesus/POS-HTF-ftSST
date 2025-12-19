@@ -8,10 +8,10 @@ Usando componentes reutilizables del sistema de diseño
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QStackedWidget, QFrame,
-    QGridLayout, QScrollArea, QSizePolicy
+    QGridLayout, QScrollArea, QSizePolicy, QDialog
 )
 from PySide6.QtCore import Qt, Signal, QSize, QTimer
-from PySide6.QtGui import QFont, QIcon, QPalette, QColor
+from PySide6.QtGui import QFont, QIcon, QPalette, QColor, QCursor
 import logging
 import subprocess
 import sys
@@ -28,7 +28,10 @@ from ui.components import (
     TopBar,
     apply_windows_phone_stylesheet,
     create_page_layout,
-    create_tile_grid_layout
+    create_tile_grid_layout,
+    show_success_dialog,
+    show_error_dialog,
+    show_warning_dialog
 )
 
 # Importar ventanas de ventas
@@ -53,6 +56,8 @@ from ui.dias_festivos_window import DiasFestvosWindow
 from ui.buscar_miembro_window import BuscarMiembroWindow
 from ui.dias_festivos_window import DiasFestvosWindow
 from ui.notificacion_entrada_widget import NotificacionEntradaWidget
+from ui.lockers_window import LockersWindow
+from ui.asignar_locker_window import AsignacionesLockersWindow
 from utils.monitor_entradas import MonitorEntradas
 from database.postgres_manager import PostgresManager
 
@@ -70,6 +75,11 @@ class MainPOSWindow(QMainWindow):
         
         self.setWindowTitle("HTF Gimnasio - Sistema POS")
         self.setGeometry(100, 50, 1400, 900)
+        
+        # Establecer icono de la ventana
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'pos_icono.png')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         
         # Establecer tamaño mínimo para evitar problemas de layout
         self.setMinimumSize(1000, 700)
@@ -189,6 +199,10 @@ class MainPOSWindow(QMainWindow):
         btn_ventas_dia.clicked.connect(self.abrir_ventas_dia)
         grid.addWidget(btn_ventas_dia, 0, 1)
         
+        btn_escanear_pago = TileButton("Escanear\nCódigo Pago", "mdi.qrcode-scan", WindowsPhoneTheme.TILE_GREEN)
+        btn_escanear_pago.clicked.connect(self.debug_escaneo_pago)
+        grid.addWidget(btn_escanear_pago, 0, 2)
+        
         btn_historial = TileButton("Historial", "fa5s.history", WindowsPhoneTheme.TILE_PURPLE)
         btn_historial.clicked.connect(self.abrir_historial)
         grid.addWidget(btn_historial, 1, 0)
@@ -286,7 +300,8 @@ class MainPOSWindow(QMainWindow):
         btn_search.clicked.connect(self.abrir_buscar_miembro)
         btn_historial = TileButton("Historial de Acceso", "fa5s.history", WindowsPhoneTheme.TILE_PURPLE)
         btn_historial.clicked.connect(self.abrir_historial_acceso)
-        btn_lockers = TileButton("Gestionar Lockers", "fa5s.key", WindowsPhoneTheme.TILE_BLUE)
+        btn_lockers = TileButton("Asignar\nLockers", "mdi.locker", WindowsPhoneTheme.TILE_BLUE)
+        btn_lockers.clicked.connect(self.abrir_asignaciones_lockers)
         
         actions_grid.addWidget(btn_search, 0, 0)
         actions_grid.addWidget(btn_historial, 0, 1)
@@ -308,30 +323,35 @@ class MainPOSWindow(QMainWindow):
         
         # Solo mostrar si es administrador
         if self.user_data['rol'] in ['administrador', 'sistemas']:
-            btn_personal = TileButton("Gestionar Personal", "fa5s.users-cog", WindowsPhoneTheme.TILE_GREEN)
+            # Fila 1
+            btn_personal = TileButton("Gestionar\nPersonal", "fa5s.users-cog", WindowsPhoneTheme.TILE_GREEN)
             btn_personal.clicked.connect(self.abrir_gestion_personal)
             admin_grid.addWidget(btn_personal, 0, 0)
             
-            btn_dias_festivos = TileButton("Días Festivos", "fa5s.calendar-alt", WindowsPhoneTheme.TILE_BLUE)
+            btn_dias_festivos = TileButton("Días\nFestivos", "fa5s.calendar-alt", WindowsPhoneTheme.TILE_BLUE)
             btn_dias_festivos.clicked.connect(self.abrir_dias_festivos)
             admin_grid.addWidget(btn_dias_festivos, 0, 1)
             
-            btn_historial_turnos = TileButton("Historial de Turnos", "fa5s.cash-register", WindowsPhoneTheme.TILE_TEAL)
+            btn_historial_turnos = TileButton("Historial\nTurnos", "fa5s.cash-register", WindowsPhoneTheme.TILE_TEAL)
             btn_historial_turnos.clicked.connect(self.abrir_historial_turnos)
             admin_grid.addWidget(btn_historial_turnos, 0, 2)
             
-            btn_asignar_turnos = TileButton("Asignar Turnos", "fa5s.calendar-check", WindowsPhoneTheme.TILE_ORANGE)
+            btn_asignar_turnos = TileButton("Asignar\nTurnos", "fa5s.calendar-check", WindowsPhoneTheme.TILE_ORANGE)
             btn_asignar_turnos.clicked.connect(self.abrir_asignacion_turnos)
-            admin_grid.addWidget(btn_asignar_turnos, 1, 0)
+            admin_grid.addWidget(btn_asignar_turnos, 0, 3)
             
-            btn_ubicaciones = TileButton("Gestionar Ubicaciones", "fa5s.warehouse", WindowsPhoneTheme.TILE_BLUE)
+            # Fila 2
+            btn_ubicaciones = TileButton("Gestionar\nUbicaciones", "fa5s.warehouse", WindowsPhoneTheme.TILE_BLUE)
             btn_ubicaciones.clicked.connect(self.abrir_gestion_ubicaciones)
-            admin_grid.addWidget(btn_ubicaciones, 1, 1)
+            admin_grid.addWidget(btn_ubicaciones, 1, 0)
             
-            # Aquí se pueden agregar más botones de administración en el futuro
-            # Ejemplo:
+            btn_catalogo_lockers = TileButton("Catálogo\nde Lockers", "mdi.locker-multiple", WindowsPhoneTheme.TILE_TEAL)
+            btn_catalogo_lockers.clicked.connect(self.abrir_catalogo_lockers)
+            admin_grid.addWidget(btn_catalogo_lockers, 1, 1)
+            
+            # Espacio para futuras funciones
             # btn_reportes = TileButton("Reportes", "fa5s.chart-bar", WindowsPhoneTheme.TILE_ORANGE)
-            # admin_grid.addWidget(btn_reportes, 1, 2)
+            # admin_grid.addWidget(btn_reportes, 1, 3)
         else:
             # Si no es administrador, mostrar mensaje
             no_access_label = StyledLabel(
@@ -358,6 +378,7 @@ class MainPOSWindow(QMainWindow):
         config_grid = create_tile_grid_layout()
         
         btn_change_password = TileButton("Cambiar Contraseña", "fa5s.lock", WindowsPhoneTheme.TILE_ORANGE)
+        btn_change_password.clicked.connect(self.cambiar_contrasena)
         btn_sync = TileButton("Sincronizar", "fa5s.sync", WindowsPhoneTheme.TILE_BLUE)
         btn_backup = TileButton("Respaldar Datos", "fa5s.database", WindowsPhoneTheme.TILE_TEAL)
         btn_logout = TileButton("Cerrar Sesión", "fa5s.sign-out-alt", WindowsPhoneTheme.TILE_RED)
@@ -379,6 +400,208 @@ class MainPOSWindow(QMainWindow):
         logging.info(f"Usuario {self.user_data['username']} cerró sesión")
         self.logout_requested.emit()
         self.close()
+    
+    def cambiar_contrasena(self):
+        """Abrir diálogo para cambiar contraseña"""
+        from PySide6.QtWidgets import QDialog, QLineEdit
+        import bcrypt
+        
+        class CambiarContrasenaDialog(QDialog):
+            def __init__(self, parent, pg_manager, user_data):
+                super().__init__(parent)
+                self.pg_manager = pg_manager
+                self.user_data = user_data
+                
+                self.setModal(True)
+                self.setWindowTitle("Cambiar Contraseña")
+                self.setMinimumWidth(500)
+                self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+                
+                # Layout principal
+                layout = QVBoxLayout(self)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.setSpacing(0)
+                
+                # Header
+                header = QFrame()
+                header.setStyleSheet(f"background-color: {WindowsPhoneTheme.PRIMARY_BLUE};")
+                header_layout = QHBoxLayout(header)
+                header_layout.setContentsMargins(28, 24, 28, 24)
+                
+                title_label = QLabel("CAMBIAR CONTRASEÑA")
+                title_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_LARGE, QFont.Bold))
+                title_label.setStyleSheet("color: white;")
+                title_label.setAlignment(Qt.AlignCenter)
+                header_layout.addWidget(title_label)
+                
+                layout.addWidget(header)
+                
+                # Content
+                content = QFrame()
+                content.setStyleSheet("background-color: white;")
+                content_layout = QVBoxLayout(content)
+                content_layout.setContentsMargins(40, 30, 40, 30)
+                content_layout.setSpacing(20)
+                
+                # Contraseña actual
+                lbl_actual = StyledLabel("Contraseña Actual:", bold=True)
+                content_layout.addWidget(lbl_actual)
+                
+                self.input_actual = QLineEdit()
+                self.input_actual.setEchoMode(QLineEdit.Password)
+                self.input_actual.setPlaceholderText("Ingrese su contraseña actual")
+                self.input_actual.setMinimumHeight(45)
+                self.input_actual.setStyleSheet(f"""
+                    QLineEdit {{
+                        padding: 10px 15px;
+                        border: 2px solid {WindowsPhoneTheme.BORDER_COLOR};
+                        font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+                    }}
+                    QLineEdit:focus {{
+                        border-color: {WindowsPhoneTheme.PRIMARY_BLUE};
+                    }}
+                """)
+                content_layout.addWidget(self.input_actual)
+                
+                content_layout.addSpacing(10)
+                
+                # Nueva contraseña
+                lbl_nueva = StyledLabel("Nueva Contraseña:", bold=True)
+                content_layout.addWidget(lbl_nueva)
+                
+                self.input_nueva = QLineEdit()
+                self.input_nueva.setEchoMode(QLineEdit.Password)
+                self.input_nueva.setPlaceholderText("Ingrese nueva contraseña")
+                self.input_nueva.setMinimumHeight(45)
+                self.input_nueva.setStyleSheet(f"""
+                    QLineEdit {{
+                        padding: 10px 15px;
+                        border: 2px solid {WindowsPhoneTheme.BORDER_COLOR};
+                        font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+                    }}
+                    QLineEdit:focus {{
+                        border-color: {WindowsPhoneTheme.PRIMARY_BLUE};
+                    }}
+                """)
+                content_layout.addWidget(self.input_nueva)
+                
+                content_layout.addSpacing(10)
+                
+                # Confirmar contraseña
+                lbl_confirmar = StyledLabel("Confirmar Nueva Contraseña:", bold=True)
+                content_layout.addWidget(lbl_confirmar)
+                
+                self.input_confirmar = QLineEdit()
+                self.input_confirmar.setEchoMode(QLineEdit.Password)
+                self.input_confirmar.setPlaceholderText("Confirme nueva contraseña")
+                self.input_confirmar.setMinimumHeight(45)
+                self.input_confirmar.setStyleSheet(f"""
+                    QLineEdit {{
+                        padding: 10px 15px;
+                        border: 2px solid {WindowsPhoneTheme.BORDER_COLOR};
+                        font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+                    }}
+                    QLineEdit:focus {{
+                        border-color: {WindowsPhoneTheme.PRIMARY_BLUE};
+                    }}
+                """)
+                content_layout.addWidget(self.input_confirmar)
+                
+                content_layout.addSpacing(20)
+                
+                # Botones
+                buttons_layout = QHBoxLayout()
+                buttons_layout.setSpacing(14)
+                buttons_layout.addStretch()
+                
+                btn_cancelar = QPushButton("Cancelar")
+                btn_cancelar.setMinimumSize(120, 45)
+                btn_cancelar.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
+                btn_cancelar.setCursor(QCursor(Qt.PointingHandCursor))
+                btn_cancelar.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {WindowsPhoneTheme.TILE_GRAY};
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: #8a8a8a;
+                    }}
+                """)
+                btn_cancelar.clicked.connect(self.reject)
+                buttons_layout.addWidget(btn_cancelar)
+                
+                btn_cambiar = QPushButton("Cambiar")
+                btn_cambiar.setMinimumSize(120, 45)
+                btn_cambiar.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
+                btn_cambiar.setCursor(QCursor(Qt.PointingHandCursor))
+                btn_cambiar.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {WindowsPhoneTheme.TILE_GREEN};
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: #00b300;
+                    }}
+                """)
+                btn_cambiar.clicked.connect(self.cambiar)
+                btn_cambiar.setDefault(True)
+                buttons_layout.addWidget(btn_cambiar)
+                
+                content_layout.addLayout(buttons_layout)
+                layout.addWidget(content)
+            
+            def cambiar(self):
+                """Validar y cambiar contraseña"""
+                actual = self.input_actual.text().strip()
+                nueva = self.input_nueva.text().strip()
+                confirmar = self.input_confirmar.text().strip()
+                
+                # Validaciones
+                if not actual or not nueva or not confirmar:
+                    show_warning_dialog(self, "Campos Vacíos", "Todos los campos son obligatorios.")
+                    return
+                
+                if len(nueva) < 6:
+                    show_warning_dialog(self, "Contraseña Débil", "La nueva contraseña debe tener al menos 6 caracteres.")
+                    return
+                
+                if nueva != confirmar:
+                    show_warning_dialog(self, "No Coinciden", "La nueva contraseña y la confirmación no coinciden.")
+                    return
+                
+                try:
+                    # Verificar contraseña actual
+                    result = self.pg_manager.client.table('usuarios').select('contrasenia').eq('nombre_usuario', self.user_data['username']).execute()
+                    
+                    if not result.data:
+                        show_error_dialog(self, "Error", "No se encontró el usuario.")
+                        return
+                    
+                    stored_password = result.data[0]['contrasenia']
+                    
+                    # Verificar contraseña actual con bcrypt
+                    if not bcrypt.checkpw(actual.encode('utf-8'), stored_password.encode('utf-8')):
+                        show_error_dialog(self, "Contraseña Incorrecta", "La contraseña actual no es correcta.")
+                        return
+                    
+                    # Cambiar contraseña usando el método del manager
+                    if self.pg_manager.update_user_password(self.user_data['username'], nueva):
+                        show_success_dialog(self, "Contraseña Actualizada", "Su contraseña ha sido cambiada exitosamente.")
+                        self.accept()
+                    else:
+                        show_error_dialog(self, "Error", "No se pudo actualizar la contraseña.")
+                
+                except Exception as e:
+                    logging.error(f"Error cambiando contraseña: {e}")
+                    show_error_dialog(self, "Error", f"Error al cambiar contraseña:\n{str(e)}")
+        
+        # Mostrar diálogo
+        dialog = CambiarContrasenaDialog(self, self.pg_manager, self.user_data)
+        dialog.exec()
         
     # ========== MÉTODOS DE VENTAS ==========
     
@@ -498,6 +721,173 @@ class MainPOSWindow(QMainWindow):
             logging.info("Abriendo widget de cierre de caja")
         except Exception as e:
             logging.error(f"Error abriendo cierre de caja: {e}")
+    
+    def escanear_codigo_pago(self):
+        """Escanear código QR para procesar pago en efectivo"""
+        try:
+            from ui.escanear_codigo_dialogo import EscanearCodigoDialogo
+            
+            # Crear diálogo
+            dialog = EscanearCodigoDialogo(
+                self.pg_manager,
+                self.supabase_service,
+                self.user_data,
+                parent=self
+            )
+            
+            # Ejecutar diálogo
+            if dialog.exec() == QDialog.Accepted and dialog.notificacion:
+                # Notificación encontrada, abrir modal
+                from ui.notification_detail_modal import NotificationDetailModal
+                detail_modal = NotificationDetailModal(
+                    dialog.notificacion, 
+                    self.pg_manager, 
+                    self.supabase_service, 
+                    self.user_data, 
+                    parent=self,
+                    sync_manager=getattr(self, 'sync_manager', None)
+                )
+                detail_modal.notificacion_procesada.connect(self._on_notificacion_procesada_debug)
+                detail_modal.exec()
+        
+        except Exception as e:
+            logging.error(f"Error en escanear_codigo_pago: {e}")
+            show_error_dialog(
+                self,
+                "Error",
+                f"Error al abrir escáner:\n{str(e)}"
+            )
+    
+    def debug_escaneo_pago(self):
+        """Abrir escaneo de código de pago"""
+        self.escanear_codigo_pago()
+    
+    def debug_procesar_pago(self, dialog):
+        """Procesar pago desde el diálogo de debug"""
+        codigo = self.debug_scan_input.text().strip()
+        
+        if not codigo:
+            show_warning_dialog(
+                self,
+                "Código vacío",
+                "Por favor escanee o ingrese un código de pago"
+            )
+            return
+        
+        try:
+            # Normalizar el código usando regex (maneja CASH' CASH_ CASH 506, etc.)
+            import re
+            codigo_original = codigo.strip()
+            codigo_upper = codigo_original.upper()
+            match = re.match(r'CASH[^\d]*(\d+)', codigo_upper)
+            if match:
+                numero = match.group(1)
+                codigo_normalizado = f"CASH-{numero}"
+                logging.info(f"[DEBUG] ✓ Regex matched: CASH + [{codigo_upper[4]}] + {numero} = {codigo_normalizado}")
+            else:
+                codigo_normalizado = codigo_upper
+                logging.info(f"[DEBUG] ✗ Regex NO matched para: {codigo_original}")
+            logging.info(f"[DEBUG] Código original: {codigo_original} → Normalizado: {codigo_normalizado}")
+            
+            notif = None
+            
+            # Buscar en Supabase
+            if self.supabase_service:
+                logging.info(f"[DEBUG] Buscando en Supabase...")
+                response = self.supabase_service.client.table('notificaciones_pos') \
+                    .select('*, miembros(nombres, apellido_paterno, apellido_materno, telefono)') \
+                    .eq('codigo_pago_generado', codigo_normalizado) \
+                    .eq('respondida', False) \
+                    .execute()
+                
+                if response.data and len(response.data) > 0:
+                    item = response.data[0]
+                    miembro = item.get('miembros') or {}
+                    
+                    notif = {
+                        'id_notificacion': item['id_notificacion'],
+                        'id_miembro': item['id_miembro'],
+                        'tipo_notificacion': item['tipo_notificacion'],
+                        'asunto': item['asunto'],
+                        'monto_pendiente': item.get('monto_pendiente'),
+                        'codigo_pago_generado': item.get('codigo_pago_generado'),
+                        'nombres': miembro.get('nombres', ''),
+                        'apellido_paterno': miembro.get('apellido_paterno', ''),
+                        'apellido_materno': miembro.get('apellido_materno', '')
+                    }
+                    logging.info(f"[DEBUG] ✓ Notificación encontrada: {notif['id_notificacion']}")
+            else:
+                # Fallback a PostgreSQL
+                logging.info(f"[DEBUG] Buscando en PostgreSQL...")
+                result = self.pg_manager.client.table('notificaciones_pos').select(
+                    'id_notificacion,id_miembro,tipo_notificacion,asunto,monto_pendiente,codigo_pago_generado,miembros(nombres,apellido_paterno,apellido_materno)'
+                ).eq('codigo_pago_generado', codigo_normalizado).eq('respondida', False).execute()
+                
+                if result.data:
+                    datos = result.data[0]
+                    miembro = datos.get('miembros') or {}
+                    notif = {
+                        'id_notificacion': datos['id_notificacion'],
+                        'id_miembro': datos['id_miembro'],
+                        'tipo_notificacion': datos['tipo_notificacion'],
+                        'asunto': datos['asunto'],
+                        'monto_pendiente': datos.get('monto_pendiente'),
+                        'codigo_pago_generado': datos['codigo_pago_generado'],
+                        'nombres': miembro.get('nombres', ''),
+                        'apellido_paterno': miembro.get('apellido_paterno', ''),
+                        'apellido_materno': miembro.get('apellido_materno', '')
+                    }
+                    logging.info(f"[DEBUG] ✓ Notificación encontrada: {notif['id_notificacion']}")
+            
+            if notif:
+                logging.info(f"[DEBUG] Abriendo modal de detalles de notificación...")
+                # Cerrar el diálogo de debug primero
+                dialog.accept()
+                
+                # Usar el nuevo NotificationDetailModal
+                from ui.notification_detail_modal import NotificationDetailModal
+                detail_modal = NotificationDetailModal(
+                    notif, 
+                    self.pg_manager, 
+                    self.supabase_service, 
+                    self.user_data, 
+                    parent=self,
+                    sync_manager=getattr(self, 'sync_manager', None)
+                )
+                detail_modal.notificacion_procesada.connect(self._on_notificacion_procesada_debug)
+                result = detail_modal.exec()
+                
+                if result:
+                    logging.info(f"[DEBUG] ✓ Notificación procesada exitosamente")
+                    show_success_dialog(
+                        self,
+                        "Notificación Procesada",
+                        f"Notificación procesada para:\n{notif['nombres']} {notif['apellido_paterno']} {notif['apellido_materno']}\n\nCódigo: {codigo_normalizado}"
+                    )
+                else:
+                    logging.info(f"[DEBUG] Usuario canceló el procesamiento")
+            else:
+                logging.info(f"[DEBUG] ✗ Código no encontrado: {codigo_normalizado}")
+                show_warning_dialog(
+                    self,
+                    "Código No Encontrado",
+                    f"No se encontró notificación pendiente con:\n{codigo_normalizado}"
+                )
+                
+        except Exception as e:
+            logging.error(f"[DEBUG] Error procesando pago: {e}")
+            import traceback
+            logging.error(traceback.format_exc())
+            show_error_dialog(
+                self,
+                "Error",
+                f"Error procesando pago:\n{str(e)}"
+            )
+    
+    def _on_notificacion_procesada_debug(self, datos_notificacion):
+        """Callback cuando se procesa una notificación desde el debug modal"""
+        logging.info(f"[DEBUG] Notificación procesada: {datos_notificacion}")
+        # Aquí se pueden actualizar contadores, actualizar UI, etc.
             
     def volver_a_ventas(self):
         """Volver a la página principal de ventas"""
@@ -668,6 +1058,54 @@ class MainPOSWindow(QMainWindow):
             
         except Exception as e:
             logging.error(f"Error abriendo gestión de ubicaciones: {e}")
+    
+    def abrir_catalogo_lockers(self):
+        """Abrir ventana de catálogo de lockers"""
+        try:
+            # Actualizar título de la barra superior
+            self.top_bar.set_title("CATÁLOGO DE LOCKERS")
+            
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Crear widget de lockers
+            lockers_widget = LockersWindow(self.pg_manager, self.user_data)
+            
+            # Conectar señal de cierre
+            lockers_widget.cerrar_solicitado.connect(self.volver_a_administracion)
+            
+            # Agregar al stack y mostrar
+            self.stacked_widget.addWidget(lockers_widget)
+            self.stacked_widget.setCurrentWidget(lockers_widget)
+            
+            logging.info("Abriendo catálogo de lockers")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo catálogo de lockers: {e}")
+    
+    def abrir_asignaciones_lockers(self):
+        """Abrir ventana de asignación de lockers"""
+        try:
+            # Actualizar título de la barra superior
+            self.top_bar.set_title("ASIGNACIONES DE LOCKERS")
+            
+            # Ocultar barra de navegación
+            self.nav_bar.hide()
+            
+            # Crear widget de asignaciones
+            asignaciones_widget = AsignacionesLockersWindow(self.pg_manager, self.user_data)
+            
+            # Conectar señal de cierre
+            asignaciones_widget.cerrar_solicitado.connect(self.volver_a_miembros)
+            
+            # Agregar al stack y mostrar
+            self.stacked_widget.addWidget(asignaciones_widget)
+            self.stacked_widget.setCurrentWidget(asignaciones_widget)
+            
+            logging.info("Abriendo asignaciones de lockers")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo asignaciones de lockers: {e}")
     
     def volver_a_administracion(self):
         """Volver a la página de administración"""

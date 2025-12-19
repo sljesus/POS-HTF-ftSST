@@ -134,20 +134,13 @@ class HistorialVentasWindow(QWidget):
     def cargar_historial(self, fecha_desde, fecha_hasta):
         """Cargar historial de ventas desde la base de datos"""
         try:
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    v.id_venta, 
-                    v.fecha, 
-                    v.total, 
-                    u.nombre_completo as usuario
-                FROM ventas v
-                JOIN usuarios u ON v.id_usuario = u.id_usuario
-                WHERE DATE(v.fecha) BETWEEN %s AND %s
-                ORDER BY v.fecha DESC
-            """, (fecha_desde, fecha_hasta))
+            response = self.pg_manager.client.table('ventas').select(
+                'id_venta, fecha, total, usuarios(nombre_completo)'
+            ).gte('fecha', f'{fecha_desde}T00:00:00').lte(
+                'fecha', f'{fecha_hasta}T23:59:59'
+            ).order('fecha', desc=True).execute()
             
-            ventas = cursor.fetchall()
+            ventas = response.data or []
             
             self.history_table.setRowCount(len(ventas))
             
@@ -169,7 +162,8 @@ class HistorialVentasWindow(QWidget):
                 self.history_table.setItem(row, 3, total_item)
                 
                 # Usuario
-                self.history_table.setItem(row, 4, QTableWidgetItem(venta.get('usuario', 'N/A')))
+                usuario_name = venta.get('usuarios', {}).get('nombre_completo', 'N/A') if isinstance(venta.get('usuarios'), dict) else venta.get('usuario', 'N/A')
+                self.history_table.setItem(row, 4, QTableWidgetItem(usuario_name))
                 
                 # Botón detalles
                 btn_detalles = QPushButton("Ver")
@@ -185,21 +179,11 @@ class HistorialVentasWindow(QWidget):
     def ver_detalles(self, venta_id):
         """Ver detalles de una venta"""
         try:
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    dv.codigo_interno,
-                    dv.tipo_producto,
-                    dv.cantidad,
-                    dv.precio_unitario,
-                    dv.subtotal_linea,
-                    dv.nombre_producto,
-                    dv.descripcion_producto
-                FROM detalles_venta dv
-                WHERE dv.id_venta = %s
-            """, (venta_id,))
+            response = self.pg_manager.client.table('detalles_venta').select(
+                'codigo_interno, tipo_producto, cantidad, precio_unitario, subtotal_linea, nombre_producto, descripcion_producto'
+            ).eq('id_venta', venta_id).execute()
             
-            detalles = cursor.fetchall()
+            detalles = response.data or []
             
             if not detalles:
                 show_info_dialog(self, "Detalles", f"No se encontraron detalles para la venta ID: {venta_id}")
@@ -243,21 +227,14 @@ class HistorialVentasWindow(QWidget):
             fecha_desde = self.fecha_desde.date().toPython()
             fecha_hasta = self.fecha_hasta.date().toPython()
             
-            # Obtener datos de ventas
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    v.id_venta, 
-                    v.fecha, 
-                    v.total, 
-                    u.nombre_completo as usuario
-                FROM ventas v
-                JOIN usuarios u ON v.id_usuario = u.id_usuario
-                WHERE DATE(v.fecha) BETWEEN %s AND %s
-                ORDER BY v.fecha DESC
-            """, (fecha_desde, fecha_hasta))
+            # Obtener datos de ventas desde Supabase
+            response = self.pg_manager.client.table('ventas').select(
+                'id_venta, fecha, total, usuarios(nombre_completo)'
+            ).gte('fecha', f'{fecha_desde}T00:00:00').lte(
+                'fecha', f'{fecha_hasta}T23:59:59'
+            ).order('fecha', desc=True).execute()
             
-            ventas = cursor.fetchall()
+            ventas = response.data or []
             
             # Crear libro de Excel
             wb = Workbook()

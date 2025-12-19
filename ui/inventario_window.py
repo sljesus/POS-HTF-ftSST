@@ -297,27 +297,12 @@ class InventarioWindow(QWidget):
         """Cargar datos de inventario desde la base de datos"""
         try:
             logging.info("Cargando inventario completo...")
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    i.codigo_interno,
-                    COALESCE(pv.codigo_barras, s.codigo_barras) as codigo_barras,
-                    COALESCE(pv.nombre, s.nombre) as nombre,
-                    COALESCE(pv.categoria, 'Suplemento') as categoria,
-                    COALESCE(pv.precio_venta, s.precio_venta) as precio,
-                    i.stock_actual,
-                    i.stock_minimo,
-                    i.ubicacion,
-                    i.activo,
-                    i.tipo_producto
-                FROM inventario i
-                LEFT JOIN ca_productos_varios pv ON i.codigo_interno = pv.codigo_interno
-                LEFT JOIN ca_suplementos s ON i.codigo_interno = s.codigo_interno
-                ORDER BY i.codigo_interno
-            """)
+            response = self.pg_manager.client.table('inventario').select(
+                '*'
+            ).order('codigo_interno').execute()
             
-            # Obtener datos (RealDictCursor ya devuelve diccionarios)
-            self.productos_data = cursor.fetchall()
+            # Obtener datos de la respuesta de Supabase
+            self.productos_data = response.data
             
             # Poblar combo de categorías
             categorias = sorted(set(p['categoria'] for p in self.productos_data if p['categoria']))

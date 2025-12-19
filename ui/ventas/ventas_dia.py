@@ -100,25 +100,17 @@ class VentasDiaWindow(QWidget):
     def actualizar_datos(self):
         """Actualizar datos de ventas del día"""
         try:
-            # Obtener ventas del día usando postgres_manager
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    v.id_venta, 
-                    v.fecha, 
-                    v.total, 
-                    u.nombre_completo as usuario
-                FROM ventas v
-                JOIN usuarios u ON v.id_usuario = u.id_usuario
-                WHERE DATE(v.fecha) = CURRENT_DATE
-                ORDER BY v.fecha DESC
-            """)
+            # Obtener ventas del día usando Supabase
+            response = self.pg_manager.client.table('ventas').select(
+                'id_venta, fecha, total, usuarios(nombre_completo)'
+            ).gte('fecha', f'{date.today()}T00:00:00').lte(
+                'fecha', f'{date.today()}T23:59:59'
+            ).order('fecha', desc=True).execute()
             
-            ventas = cursor.fetchall()
-
-            total_vendido = sum(venta['total'] for venta in ventas)
+            ventas = response.data or []
+            total_vendido = sum(v.get('total', 0) for v in ventas)
             num_ventas = len(ventas)
-
+            
             self.total_value.setText(f"${total_vendido:.2f}")
             self.ventas_count.setText(str(num_ventas))
 
@@ -150,21 +142,14 @@ class VentasDiaWindow(QWidget):
                 )
                 return
             
-            # Obtener ventas del día
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    v.id_venta, 
-                    v.fecha, 
-                    v.total, 
-                    u.nombre_completo as usuario
-                FROM ventas v
-                JOIN usuarios u ON v.id_usuario = u.id_usuario
-                WHERE DATE(v.fecha) = CURRENT_DATE
-                ORDER BY v.fecha DESC
-            """)
+            # Obtener ventas del día desde Supabase
+            response = self.pg_manager.client.table('ventas').select(
+                'id_venta, fecha, total, usuarios(nombre_completo)'
+            ).gte('fecha', f'{date.today()}T00:00:00').lte(
+                'fecha', f'{date.today()}T23:59:59'
+            ).order('fecha', desc=True).execute()
             
-            ventas = cursor.fetchall()
+            ventas = response.data or []
             
             # Crear libro de Excel
             wb = Workbook()
@@ -304,20 +289,13 @@ class DetalleVentasDiaDialog(QDialog):
     def cargar_ventas(self):
         """Cargar ventas del día"""
         try:
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    v.id_venta, 
-                    v.fecha, 
-                    v.total, 
-                    u.nombre_completo as usuario
-                FROM ventas v
-                JOIN usuarios u ON v.id_usuario = u.id_usuario
-                WHERE DATE(v.fecha) = %s
-                ORDER BY v.fecha DESC
-            """, (self.fecha,))
+            fecha_inicio = f"{self.fecha}T00:00:00"
+            fecha_fin = f"{self.fecha}T23:59:59"
+            response = self.pg_manager.client.table('ventas').select(
+                'id_venta, fecha, total, usuarios(nombre_completo)'
+            ).gte('fecha', fecha_inicio).lte('fecha', fecha_fin).order('fecha', desc=True).execute()
             
-            ventas = cursor.fetchall()
+            ventas = response.data or []
             
             self.tabla_ventas.setRowCount(len(ventas))
             
@@ -335,7 +313,8 @@ class DetalleVentasDiaDialog(QDialog):
                 self.tabla_ventas.setItem(row, 2, total_item)
                 
                 # Usuario
-                self.tabla_ventas.setItem(row, 3, QTableWidgetItem(venta.get('usuario', 'N/A')))
+                usuario_name = venta.get('usuarios', {}).get('nombre_completo', 'N/A') if isinstance(venta.get('usuarios'), dict) else venta.get('usuario', 'N/A')
+                self.tabla_ventas.setItem(row, 3, QTableWidgetItem(usuario_name))
                 
                 # Estado
                 self.tabla_ventas.setItem(row, 4, QTableWidgetItem("Completada"))
@@ -438,45 +417,29 @@ class DetalleComandaDialog(QDialog):
         """Cargar detalle de la comanda"""
         try:
             # Obtener información de la venta
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    v.id_venta,
-                    v.fecha,
-                    v.total,
-                    u.nombre_completo as usuario
-                FROM ventas v
-                JOIN usuarios u ON v.id_usuario = u.id_usuario
-                WHERE v.id_venta = %s
-            """, (self.venta_id,))
+            response = self.pg_manager.client.table('ventas').select(
+                'id_venta, fecha, total, usuarios(nombre_completo)'
+            ).eq('id_venta', self.venta_id).single().execute()
             
-            venta = cursor.fetchone()
+            venta = response.data
             
             if not venta:
                 show_warning_dialog(self, "Error", f"No se encontró la venta #{self.venta_id}")
                 return
             
             # Actualizar información de cabecera
-            fecha_str = venta['fecha'].strftime("%d/%m/%Y %H:%M") if isinstance(venta['fecha'], datetime) else str(venta['fecha'])
+            fecha_str = venta['fecha'][:16].replace('T', ' ') if isinstance(venta['fecha'], str) else venta['fecha'].strftime("%d/%m/%Y %H:%M")
+            usuario_name = venta.get('usuarios', {}).get('nombre_completo', 'N/A') if isinstance(venta.get('usuarios'), dict) else 'N/A'
             self.fecha_label.setText(f"Fecha: {fecha_str}")
-            self.usuario_label.setText(f"Usuario: {venta.get('usuario', 'N/A')}")
+            self.usuario_label.setText(f"Usuario: {usuario_name}")
             self.total_label.setText(f"Total: ${venta['total']:.2f}")
             
             # Obtener items de la venta
-            cursor.execute("""
-                SELECT 
-                    dv.codigo_interno,
-                    dv.tipo_producto,
-                    dv.cantidad,
-                    dv.precio_unitario,
-                    dv.subtotal_linea,
-                    dv.nombre_producto,
-                    dv.descripcion_producto
-                FROM detalles_venta dv
-                WHERE dv.id_venta = %s
-            """, (self.venta_id,))
+            response_items = self.pg_manager.client.table('detalles_venta').select(
+                'codigo_interno, tipo_producto, cantidad, precio_unitario, subtotal_linea, nombre_producto, descripcion_producto'
+            ).eq('id_venta', self.venta_id).execute()
             
-            items = cursor.fetchall()
+            items = response_items.data or []
             
             self.tabla_productos.setRowCount(len(items))
             

@@ -6,8 +6,9 @@ Integrado con PostgreSQL y Supabase
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                                QLabel, QLineEdit, QPushButton, QFrame)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QIcon
 import logging
+import os
 
 # Importar componentes del sistema de diseño
 from ui.components import (
@@ -42,6 +43,11 @@ class LoginWindow(QMainWindow):
         """Configurar la interfaz de usuario"""
         self.setWindowTitle("HTF Gimnasio - Sistema POS")
         self.setFixedSize(1000, 600)
+        
+        # Establecer icono de la ventana
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'pos_icono.png')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         
         # Widget central
         central_widget = QWidget()
@@ -164,7 +170,7 @@ class LoginWindow(QMainWindow):
         self.login_button.clicked.connect(self.handle_login)
         
         # Info de usuario por defecto
-        info_label = QLabel("Usuario: admin | Contraseña: admin123")
+        info_label = QLabel("")
         info_label.setObjectName("infoLabel")
         info_label.setAlignment(Qt.AlignCenter)
         info_label.setFont(QFont("Segoe UI", 9))

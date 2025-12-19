@@ -42,40 +42,17 @@ class MovimientosLoaderThread(QThread):
         """Cargar movimientos desde la base de datos en un hilo separado"""
         try:
             # Verificar que la conexión esté activa
-            if not self.pg_manager.connection or self.pg_manager.connection.closed:
+            if not self.pg_manager.is_connected:
                 self.pg_manager.connect()
                 
-            with self.pg_manager.connection.cursor() as cursor:
-                # Query para obtener movimientos con información del producto y usuario
-                query = """
-                    SELECT 
-                        m.id_movimiento,
-                        m.fecha,
-                        m.tipo_movimiento,
-                        m.codigo_interno,
-                        m.tipo_producto,
-                        m.cantidad,
-                        m.stock_anterior,
-                        m.stock_nuevo,
-                        m.motivo,
-                        m.id_usuario,
-                        m.id_venta,
-                        COALESCE(pv.nombre, s.nombre, 'Producto desconocido') as nombre_producto,
-                        u.nombre_usuario
-                    FROM movimientos_inventario m
-                    LEFT JOIN ca_productos_varios pv ON m.codigo_interno = pv.codigo_interno 
-                        AND m.tipo_producto = 'varios'
-                    LEFT JOIN ca_suplementos s ON m.codigo_interno = s.codigo_interno 
-                        AND m.tipo_producto = 'suplemento'
-                    LEFT JOIN usuarios u ON m.id_usuario = u.id_usuario
-                    ORDER BY m.fecha DESC, m.id_movimiento DESC
-                    LIMIT 1000
-                """
-                
-                cursor.execute(query)
-                rows = cursor.fetchall()
-                
-                self.movimientos_loaded.emit(rows)
+            # Obtener movimientos desde Supabase
+            response = self.pg_manager.client.table('movimientos_inventario').select(
+                'id_movimiento, fecha, tipo_movimiento, codigo_interno, tipo_producto, cantidad, '
+                'stock_anterior, stock_nuevo, motivo, id_usuario, id_venta'
+            ).order('fecha', desc=True).limit(1000).execute()
+            
+            rows = response.data if response.data else []
+            self.movimientos_loaded.emit(rows)
                 
         except Exception as e:
             self.error_occurred.emit(str(e))

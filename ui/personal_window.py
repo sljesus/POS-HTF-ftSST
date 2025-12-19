@@ -225,7 +225,6 @@ class FormularioPersonalDialog(QDialog):
             return
             
         try:
-            cursor = self.pg_manager.connection.cursor()
             
             # Generar código QR único si es nuevo
             if not self.personal_data:
@@ -238,52 +237,35 @@ class FormularioPersonalDialog(QDialog):
             
             if self.personal_data:
                 # Actualizar
-                cursor.execute("""
-                    UPDATE personal SET
-                        nombres = %s,
-                        apellido_paterno = %s,
-                        apellido_materno = %s,
-                        rol = %s,
-                        telefono = %s,
-                        email = %s,
-                        numero_empleado = %s,
-                        fecha_contratacion = %s,
-                        needs_sync = 1
-                    WHERE id_personal = %s
-                """, (
-                    self.input_nombres.text().strip(),
-                    self.input_apellido_paterno.text().strip(),
-                    self.input_apellido_materno.text().strip(),
-                    self.combo_rol.currentText(),
-                    self.input_telefono.text().strip() or None,
-                    self.input_email.text().strip() or None,
-                    self.input_num_empleado.text().strip() or None,
-                    fecha_contratacion,
-                    self.personal_data['id_personal']
-                ))
+                self.pg_manager.client.table('personal').update({
+                    'nombres': self.input_nombres.text().strip(),
+                    'apellido_paterno': self.input_apellido_paterno.text().strip(),
+                    'apellido_materno': self.input_apellido_materno.text().strip(),
+                    'rol': self.combo_rol.currentText(),
+                    'telefono': self.input_telefono.text().strip() or None,
+                    'email': self.input_email.text().strip() or None,
+                    'numero_empleado': self.input_num_empleado.text().strip() or None,
+                    'fecha_contratacion': fecha_contratacion,
+                    'needs_sync': 1
+                }).eq('id_personal', self.personal_data['id_personal']).execute()
                 mensaje = "Personal actualizado correctamente"
             else:
                 # Insertar
-                cursor.execute("""
-                    INSERT INTO personal (
-                        nombres, apellido_paterno, apellido_materno, rol,
-                        telefono, email, numero_empleado, codigo_qr,
-                        fecha_contratacion, activo, needs_sync
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, 1)
-                """, (
-                    self.input_nombres.text().strip(),
-                    self.input_apellido_paterno.text().strip(),
-                    self.input_apellido_materno.text().strip(),
-                    self.combo_rol.currentText(),
-                    self.input_telefono.text().strip() or None,
-                    self.input_email.text().strip() or None,
-                    self.input_num_empleado.text().strip() or None,
-                    codigo_qr,
-                    fecha_contratacion
-                ))
+                self.pg_manager.client.table('personal').insert({
+                    'nombres': self.input_nombres.text().strip(),
+                    'apellido_paterno': self.input_apellido_paterno.text().strip(),
+                    'apellido_materno': self.input_apellido_materno.text().strip(),
+                    'rol': self.combo_rol.currentText(),
+                    'telefono': self.input_telefono.text().strip() or None,
+                    'email': self.input_email.text().strip() or None,
+                    'numero_empleado': self.input_num_empleado.text().strip() or None,
+                    'codigo_qr': codigo_qr,
+                    'fecha_contratacion': fecha_contratacion,
+                    'activo': 1,
+                    'needs_sync': 1
+                }).execute()
                 mensaje = "Personal registrado correctamente"
-                
-            self.pg_manager.connection.commit()
+            
             show_success_dialog(self, "Éxito", mensaje)
             
             # Aceptar el diálogo
@@ -399,21 +381,10 @@ class PersonalWindow(QWidget):
     def cargar_personal(self):
         """Cargar lista de personal"""
         try:
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    id_personal,
-                    nombres,
-                    apellido_paterno,
-                    apellido_materno,
-                    rol,
-                    telefono,
-                    email,
-                    activo
-                FROM personal
-                ORDER BY apellido_paterno, apellido_materno, nombres
-            """)
-            personal = cursor.fetchall()
+            response = self.pg_manager.client.table('personal').select(
+                'id_personal, nombres, apellido_paterno, apellido_materno, rol, telefono, email, activo'
+            ).order('apellido_paterno,apellido_materno,nombres').execute()
+            personal = response.data
             self.tabla_personal.setRowCount(0)
             
             for persona in personal:
@@ -467,12 +438,8 @@ class PersonalWindow(QWidget):
         id_personal = int(self.tabla_personal.item(row, 0).text())
         
         try:
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT * FROM personal WHERE id_personal = %s
-            """, (id_personal,))
-            
-            persona = cursor.fetchone()
+            response = self.pg_manager.client.table('personal').select('*').eq('id_personal', id_personal).execute()
+            persona = response.data[0] if response.data else None
             if persona:
                 dialog = FormularioPersonalDialog(
                     self.pg_manager, 
@@ -506,16 +473,12 @@ class PersonalWindow(QWidget):
             cancel_text="Cancelar"
         ):
             try:
-                cursor = self.pg_manager.connection.cursor()
-                cursor.execute("""
-                    UPDATE personal SET
-                        activo = 0,
-                        fecha_baja = %s,
-                        needs_sync = 1
-                    WHERE id_personal = %s
-                """, (date.today().strftime('%Y-%m-%d'), id_personal))
+                self.pg_manager.client.table('personal').update({
+                    'activo': 0,
+                    'fecha_baja': date.today().strftime('%Y-%m-%d'),
+                    'needs_sync': 1
+                }).eq('id_personal', id_personal).execute()
                 
-                self.pg_manager.connection.commit()
                 show_success_dialog(self, "Éxito", "Personal dado de baja correctamente")
                 
                 self.cargar_personal()

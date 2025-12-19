@@ -489,24 +489,18 @@ class VentasDiaWindow(QWidget):
     def actualizar_datos(self):
         """Actualizar datos de ventas del día"""
         try:
-            # Obtener ventas del día usando postgres_manager
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    v.id_venta, 
-                    v.fecha, 
-                    v.total, 
-                    u.nombre_completo as usuario
-                FROM ventas v
-                JOIN usuarios u ON v.id_usuario = u.id_usuario
-                WHERE DATE(v.fecha) = CURRENT_DATE
-                ORDER BY v.fecha DESC
-            """)
+            # Obtener ventas del día usando Supabase
+            from datetime import date
+            response = self.pg_manager.client.table('ventas').select(
+                'id_venta, fecha, total, usuarios(nombre_completo)'
+            ).gte('fecha', f'{date.today()}T00:00:00').lte(
+                'fecha', f'{date.today()}T23:59:59'
+            ).order('fecha', desc=True).execute()
             
-            ventas = cursor.fetchall()
+            ventas = response.data or []
             
             # Calcular resumen
-            total_vendido = sum(venta['total'] for venta in ventas)
+            total_vendido = sum(v.get('total', 0) for v in ventas)
             num_ventas = len(ventas)
             promedio = total_vendido / num_ventas if num_ventas > 0 else 0
             
@@ -647,22 +641,13 @@ class HistorialVentasWindow(QWidget):
             fecha_desde = self.fecha_desde.date().toPython()
             fecha_hasta = self.fecha_hasta.date().toPython()
             
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute(
-                '''
-                SELECT 
-                    v.id_venta, 
-                    v.fecha, 
-                    v.total, 
-                    u.nombre_completo as usuario
-                FROM ventas v
-                JOIN usuarios u ON v.id_usuario = u.id_usuario
-                WHERE DATE(v.fecha) BETWEEN %s AND %s
-                ORDER BY v.fecha DESC
-                ''', (fecha_desde, fecha_hasta)
-            )
+            response = self.pg_manager.client.table('ventas').select(
+                'id_venta, fecha, total, usuarios(nombre_completo)'
+            ).gte('fecha', f'{fecha_desde}T00:00:00').lte(
+                'fecha', f'{fecha_hasta}T23:59:59'
+            ).order('fecha', desc=True).execute()
             
-            ventas = cursor.fetchall()
+            ventas = response.data or []
             
             self.history_table.setRowCount(len(ventas))
             
@@ -731,17 +716,16 @@ class CierreCajaWindow(QWidget):
     def verificar_turno_abierto(self):
         """Verificar si el usuario tiene un turno abierto"""
         try:
-            with self.pg_manager.connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT id_turno, monto_inicial, fecha_apertura
-                    FROM turnos_caja 
-                    WHERE id_usuario = %s AND cerrado = FALSE
-                    ORDER BY fecha_apertura DESC
-                    LIMIT 1
-                """, (self.user_data['id_usuario'],))
-                
-                self.turno_abierto = cursor.fetchone()
-                return self.turno_abierto is not None
+            response = self.pg_manager.client.table('turnos_caja').select(
+                'id_turno, monto_inicial, fecha_apertura'
+            ).eq('id_usuario', self.user_data['id_usuario']).eq(
+                'cerrado', False
+            ).order('fecha_apertura', desc=True).limit(1).execute()
+            
+            if response.data and len(response.data) > 0:
+                self.turno_abierto = response.data[0]
+                return True
+            return False
                 
         except Exception as e:
             logging.error(f"Error verificando turno abierto: {e}")
@@ -949,22 +933,16 @@ class CierreCajaWindow(QWidget):
     def cargar_resumen(self):
         """Cargar resumen del día"""
         try:
-            # Obtener ventas del día usando postgres_manager
-            cursor = self.pg_manager.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    v.id_venta, 
-                    v.fecha, 
-                    v.total, 
-                    u.nombre_completo as usuario
-                FROM ventas v
-                JOIN usuarios u ON v.id_usuario = u.id_usuario
-                WHERE DATE(v.fecha) = CURRENT_DATE
-                ORDER BY v.fecha DESC
-            """)
+            # Obtener ventas del día usando Supabase
+            from datetime import date
+            response = self.pg_manager.client.table('ventas').select(
+                'id_venta, fecha, total, usuarios(nombre_completo)'
+            ).gte('fecha', f'{date.today()}T00:00:00').lte(
+                'fecha', f'{date.today()}T23:59:59'
+            ).order('fecha', desc=True).execute()
             
-            ventas = cursor.fetchall()
-            total_esperado = sum(venta['total'] for venta in ventas)
+            ventas = response.data or []
+            total_esperado = sum(v.get('total', 0) for v in ventas)
             num_ventas = len(ventas)
             
             # Actualizar widgets
@@ -1162,42 +1140,31 @@ class CierreCajaWindow(QWidget):
                 }
                 
                 # Registrar cierre en la base de datos
-                with self.pg_manager.connection.cursor() as cursor:
-                    # Usar el turno que ya verificamos que está abierto
-                    if not self.turno_abierto:
-                        raise Exception("No hay turno abierto para cerrar")
-                    
-                    # Preparar notas incluyendo autorización si existe
-                    notas_cierre = cierre_data.get('notas', '')
-                    if self.autorizacion:
-                        auth_info = (
-                            f"\n\n--- AUTORIZACIÓN ADMINISTRADOR ---\n"
-                            f"Autorizado por: {self.autorizacion['nombre_admin']}\n"
-                            f"Justificación: {self.autorizacion['justificacion']}"
-                        )
-                        notas_cierre = (notas_cierre + auth_info) if notas_cierre else auth_info.strip()
-                    
-                    # Actualizar turno existente
-                    cursor.execute("""
-                        UPDATE turnos_caja 
-                        SET fecha_cierre = CURRENT_TIMESTAMP,
-                            total_ventas_efectivo = %s,
-                            monto_esperado = %s,
-                            monto_real_cierre = %s,
-                            diferencia = %s,
-                            cerrado = TRUE,
-                            notas_apertura = COALESCE(notas_apertura, '') || %s
-                        WHERE id_turno = %s
-                    """, (
-                        cierre_data['total_esperado'],
-                        float(self.turno_abierto['monto_inicial']) + cierre_data['total_esperado'],
-                        cierre_data['total_contado'],
-                        cierre_data['diferencia'],
-                        '\n' + notas_cierre if self.turno_abierto.get('notas_apertura') else notas_cierre,
-                        self.turno_abierto['id_turno']
-                    ))
-                    
-                    self.pg_manager.connection.commit()
+                # Usar el turno que ya verificamos que está abierto
+                if not self.turno_abierto:
+                    raise Exception("No hay turno abierto para cerrar")
+                
+                # Preparar notas incluyendo autorización si existe
+                notas_cierre = cierre_data.get('notas', '')
+                if self.autorizacion:
+                    auth_info = (
+                        f"\n\n--- AUTORIZACIÓN ADMINISTRADOR ---\n"
+                        f"Autorizado por: {self.autorizacion['nombre_admin']}\n"
+                        f"Justificación: {self.autorizacion['justificacion']}"
+                    )
+                    notas_cierre = (notas_cierre + auth_info) if notas_cierre else auth_info.strip()
+                
+                # Actualizar turno existente
+                from datetime import datetime
+                self.pg_manager.client.table('turnos_caja').update({
+                    'fecha_cierre': datetime.now().isoformat(),
+                    'total_ventas_efectivo': cierre_data['total_esperado'],
+                    'monto_esperado': float(self.turno_abierto['monto_inicial']) + cierre_data['total_esperado'],
+                    'monto_real_cierre': cierre_data['total_contado'],
+                    'diferencia': cierre_data['diferencia'],
+                    'cerrado': True,
+                    'notas_apertura': (self.turno_abierto.get('notas_apertura', '') or '') + ('\n' + notas_cierre if self.turno_abierto.get('notas_apertura') else notas_cierre)
+                }).eq('id_turno', self.turno_abierto['id_turno']).execute()
                 
                 show_success_dialog(self, "Cierre Completado", "Cierre de caja registrado exitosamente.")
                 self.cerrar_solicitado.emit()

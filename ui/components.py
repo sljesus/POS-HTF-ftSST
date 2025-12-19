@@ -25,10 +25,15 @@ class WindowsPhoneTheme:
     TILE_BLUE = "#0078d7"
     TILE_TEAL = "#00aba9"
     TILE_MAGENTA = "#e3008c"
+    TILE_GRAY = "#737373"
     
     # Colores de fondo
     BG_BLACK = "#000000"
     BG_LIGHT = "#f5f5f5"
+    
+    # Colores de texto
+    TEXT_PRIMARY = "#1f2937"
+    TEXT_SECONDARY = "#6b7280"
     
     # Colores de bordes
     BORDER_COLOR = "#e0e0e0"
@@ -71,11 +76,29 @@ class TileButton(QPushButton):
     def __init__(self, text, icon_name=None, color=WindowsPhoneTheme.TILE_BLUE, parent=None):
         super().__init__(parent)
         
+        self._color = color
         self.setMinimumHeight(WindowsPhoneTheme.TILE_MIN_HEIGHT)
         self.setMinimumWidth(WindowsPhoneTheme.TILE_MIN_WIDTH)
         self.setObjectName("tileButton")
         self.setCursor(QCursor(Qt.PointingHandCursor))
         self.setProperty("tileColor", color)
+        
+        # Aplicar estilo directamente para garantizar el color
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {color};
+                border: none;
+                border-radius: 0px;
+            }}
+            QPushButton:hover {{
+                background-color: {color};
+                opacity: 0.9;
+            }}
+            QPushButton:pressed {{
+                background-color: {color};
+                opacity: 0.7;
+            }}
+        """)
         
         # Layout vertical para icono + texto
         layout = QVBoxLayout(self)
@@ -97,8 +120,9 @@ class TileButton(QPushButton):
                 # Fallback: usar emoji si qtawesome falla
                 icon_label.setText("⚙")
                 icon_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, 48))
-                icon_label.setStyleSheet("color: white;")
+                icon_label.setStyleSheet("color: white; background: transparent;")
             icon_label.setObjectName("tileIcon")
+            icon_label.setStyleSheet("background: transparent;")
             layout.addWidget(icon_label)
         
         # Texto debajo
@@ -107,7 +131,7 @@ class TileButton(QPushButton):
         text_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
         text_label.setWordWrap(True)
         text_label.setObjectName("tileText")
-        text_label.setStyleSheet("color: white;")
+        text_label.setStyleSheet("color: white; background: transparent;")
         layout.addWidget(text_label)
 
 
@@ -441,6 +465,10 @@ def apply_windows_phone_stylesheet(widget):
         
         QPushButton#tileButton[tileColor="{theme.TILE_MAGENTA}"] {{
             background-color: {theme.TILE_MAGENTA};
+        }}
+        
+        QPushButton#tileButton[tileColor="{theme.TILE_GRAY}"] {{
+            background-color: {theme.TILE_GRAY};
         }}
         
         QPushButton#tileButton:hover {{
@@ -902,14 +930,171 @@ def show_confirmation_dialog(
 
 
 def show_input_dialog(parent, title, message, placeholder=""):
-    """Mostrar diálogo para solicitar entrada de texto"""
-    from PySide6.QtWidgets import QInputDialog
+    """Mostrar diálogo personalizado para solicitar entrada de texto (compatible con escáner)"""
+    from PySide6.QtWidgets import QLineEdit
+    from PySide6.QtCore import QTimer, QEvent
     
-    text, ok = QInputDialog.getText(
-        parent,
-        title,
-        message,
-        text=placeholder
-    )
+    class StyledInputDialog(QDialog):
+        def __init__(self, parent, title, message, placeholder):
+            super().__init__(parent)
+            self.setModal(True)
+            self.setWindowTitle(title)
+            self.setMinimumWidth(500)
+            self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+            
+            # Timer para detectar fin de escaneo
+            self.scanner_timer = QTimer()
+            self.scanner_timer.setSingleShot(True)
+            self.scanner_timer.setInterval(300)  # 300ms sin entrada = fin de escaneo
+            self.scanner_timer.timeout.connect(self.on_scanner_complete)
+            
+            # Layout principal
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            
+            # Header
+            header = QFrame()
+            header.setStyleSheet(f"background-color: {WindowsPhoneTheme.PRIMARY_BLUE};")
+            header_layout = QHBoxLayout(header)
+            header_layout.setContentsMargins(28, 24, 28, 24)
+            
+            # Título
+            title_label = QLabel(title.upper())
+            title_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_LARGE, QFont.Bold))
+            title_label.setStyleSheet("color: white; background: transparent;")
+            title_label.setAlignment(Qt.AlignCenter)
+            header_layout.addWidget(title_label)
+            
+            layout.addWidget(header)
+            
+            # Content
+            content = QFrame()
+            content.setStyleSheet("background-color: white;")
+            content_layout = QVBoxLayout(content)
+            content_layout.setContentsMargins(50, 50, 50, 50)
+            content_layout.setSpacing(30)
+            
+            # Ícono QR grande centrado
+            icon_container = QWidget()
+            icon_layout = QVBoxLayout(icon_container)
+            icon_layout.setAlignment(Qt.AlignCenter)
+            
+            icon_label = QLabel()
+            icon_label.setAlignment(Qt.AlignCenter)
+            icon_label.setFixedSize(120, 120)
+            try:
+                icon_label.setPixmap(
+                    qta.icon("mdi.qrcode-scan", color=WindowsPhoneTheme.PRIMARY_BLUE).pixmap(QSize(120, 120))
+                )
+            except:
+                icon_label.setText("📷")
+                icon_label.setStyleSheet(f"color: {WindowsPhoneTheme.PRIMARY_BLUE}; font-size: 96px;")
+            icon_layout.addWidget(icon_label)
+            
+            content_layout.addWidget(icon_container)
+            
+            # Mensaje
+            message_label = QLabel(message)
+            message_label.setWordWrap(True)
+            message_label.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+            message_label.setStyleSheet(f"color: {WindowsPhoneTheme.TEXT_PRIMARY};")
+            message_label.setAlignment(Qt.AlignCenter)
+            content_layout.addWidget(message_label)
+            
+            # Input oculto (sin mostrar visualmente, pero recibe el foco)
+            self.input_field = QLineEdit()
+            self.input_field.setPlaceholderText(placeholder)
+            self.input_field.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+            self.input_field.hide()  # Ocultar el campo
+            
+            # Conectar eventos del input
+            self.input_field.installEventFilter(self)
+            self.input_field.textChanged.connect(self.on_text_changed)
+            
+            content_layout.addSpacing(20)
+            
+            # Botones
+            buttons_layout = QHBoxLayout()
+            buttons_layout.setSpacing(14)
+            buttons_layout.addStretch()
+            
+            btn_cancelar = QPushButton("Cancelar")
+            btn_cancelar.setMinimumSize(120, 45)
+            btn_cancelar.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
+            btn_cancelar.setCursor(QCursor(Qt.PointingHandCursor))
+            btn_cancelar.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {WindowsPhoneTheme.TILE_GRAY};
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                }}
+                QPushButton:hover {{
+                    background-color: #8a8a8a;
+                }}
+            """)
+            btn_cancelar.clicked.connect(self.reject)
+            buttons_layout.addWidget(btn_cancelar)
+            
+            btn_aceptar = QPushButton("Aceptar")
+            btn_aceptar.setMinimumSize(120, 45)
+            btn_aceptar.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
+            btn_aceptar.setCursor(QCursor(Qt.PointingHandCursor))
+            btn_aceptar.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {WindowsPhoneTheme.TILE_GREEN};
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                }}
+                QPushButton:hover {{
+                    background-color: #00b300;
+                }}
+            """)
+            btn_aceptar.clicked.connect(self.accept)
+            btn_aceptar.setDefault(True)
+            buttons_layout.addWidget(btn_aceptar)
+            
+            content_layout.addLayout(buttons_layout)
+            layout.addWidget(content)
+            
+            # Dar foco al input
+            self.input_field.setFocus()
+        
+        def eventFilter(self, obj, event):
+            """Detectar cuando el escáner presiona Enter"""
+            if obj == self.input_field and event.type() == QEvent.KeyPress:
+                key_event = event
+                # Si es Enter o Return, procesar el código
+                if key_event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                    self.on_scanner_complete()
+                    return True
+            
+            return super().eventFilter(obj, event)
+        
+        def on_text_changed(self):
+            """Reiniciar timer cuando se ingresa texto"""
+            # Detener el timer anterior
+            self.scanner_timer.stop()
+            
+            # Si hay texto, iniciar timer
+            if self.input_field.text().strip():
+                self.scanner_timer.start()
+        
+        def on_scanner_complete(self):
+            """Cuando se completa la lectura del escáner o se presiona Enter"""
+            codigo = self.input_field.text().strip()
+            if codigo:
+                self.accept()
+        
+        def get_text(self):
+            return self.input_field.text()
     
-    return text, ok
+    dialog = StyledInputDialog(parent, title, message, placeholder)
+    result = dialog.exec()
+    
+    if result == QDialog.Accepted:
+        return dialog.get_text(), True
+    return "", False
+

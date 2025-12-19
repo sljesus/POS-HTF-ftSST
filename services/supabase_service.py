@@ -17,7 +17,8 @@ except ImportError:
 class SupabaseService:
     def __init__(self, url=None, key=None):
         self.url = url or os.getenv('SUPABASE_URL')
-        self.key = key or os.getenv('SUPABASE_KEY')
+        # Usar SUPABASE_ROLE_KEY para bypasear RLS; fallback a SUPABASE_KEY
+        self.key = key or os.getenv('SUPABASE_ROLE_KEY') or os.getenv('SUPABASE_KEY')
         self.client = None
         self.is_connected = False
         

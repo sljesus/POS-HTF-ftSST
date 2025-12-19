@@ -255,10 +255,6 @@ class MovimientoInventarioWindow(QWidget):
             return
         
         try:
-            # Verificar que la conexión esté activa
-            if not self.pg_manager.connection or self.pg_manager.connection.closed:
-                self.pg_manager.connect()
-            
             # Buscar primero por código interno
             producto = self.pg_manager.get_product_by_code(codigo)
             
@@ -333,10 +329,6 @@ class MovimientoInventarioWindow(QWidget):
                 return
         
         try:
-            # Verificar que la conexión esté activa
-            if not self.pg_manager.connection or self.pg_manager.connection.closed:
-                self.pg_manager.connect()
-            
             # Preparar datos del movimiento
             motivo_texto = self.tipo_combo.currentText() if self.tipo_movimiento == "entrada" else self.motivo_combo.currentText()
             fecha = self.fecha_input.date().toPython().strftime("%Y-%m-%d")
@@ -360,59 +352,42 @@ class MovimientoInventarioWindow(QWidget):
                 else:
                     tipo_movimiento_db = "merma"  # Por defecto para salidas
             
-            # Usar transacción con gestor de contexto
-            with self.pg_manager.connection.cursor() as cursor:
-                # Obtener stock actual antes del movimiento
-                cursor.execute("SELECT stock_actual FROM inventario WHERE codigo_interno = %s", 
-                              (self.producto_seleccionado['codigo_interno'],))
-                result = cursor.fetchone()
-                stock_anterior = result['stock_actual'] if result else 0
-                
-                if self.tipo_movimiento == "entrada":
-                    # Incrementar stock
-                    nuevo_stock = stock_anterior + cantidad
-                    cursor.execute("""
-                        UPDATE inventario 
-                        SET stock_actual = %s,
-                            fecha_ultima_entrada = CURRENT_TIMESTAMP
-                        WHERE codigo_interno = %s
-                    """, (nuevo_stock, self.producto_seleccionado['codigo_interno']))
-                else:
-                    # Decrementar stock
-                    nuevo_stock = stock_anterior - cantidad
-                    cursor.execute("""
-                        UPDATE inventario 
-                        SET stock_actual = %s,
-                            fecha_ultima_salida = CURRENT_TIMESTAMP
-                        WHERE codigo_interno = %s
-                    """, (nuevo_stock, self.producto_seleccionado['codigo_interno']))
-                
-                # Registrar el movimiento en la tabla de movimientos
-                cursor.execute("""
-                    INSERT INTO movimientos_inventario (
-                        codigo_interno,
-                        tipo_producto,
-                        tipo_movimiento,
-                        cantidad,
-                        stock_anterior,
-                        stock_nuevo,
-                        motivo,
-                        fecha,
-                        id_usuario
-                    ) VALUES (%s, %s, %s::tipo_movimiento_inventario, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
-                """, (
+            # Usar Supabase para obtener y actualizar datos
+            # Obtener stock actual antes del movimiento
+            inventario_data = self.supabase_service.get_inventario(
+                self.producto_seleccionado['codigo_interno']
+            )
+            stock_anterior = inventario_data['stock_actual'] if inventario_data else 0
+            
+            if self.tipo_movimiento == "entrada":
+                # Incrementar stock
+                nuevo_stock = stock_anterior + cantidad
+                self.supabase_service.update_inventario_stock(
                     self.producto_seleccionado['codigo_interno'],
-                    self.producto_seleccionado['tipo'],
-                    tipo_movimiento_db,
-                    cantidad if self.tipo_movimiento == "entrada" else -cantidad,  # Positivo para entrada, negativo para salida
-                    stock_anterior,
                     nuevo_stock,
-                    motivo_texto,
-                    self.user_data.get('id_usuario')
-                ))
-                
-                # Confirmar transacción
-                self.pg_manager.connection.commit()
+                    fecha_entrada=datetime.now().isoformat()
+                )
+            else:
+                # Decrementar stock
+                nuevo_stock = stock_anterior - cantidad
+                self.supabase_service.update_inventario_stock(
+                    self.producto_seleccionado['codigo_interno'],
+                    nuevo_stock,
+                    fecha_salida=datetime.now().isoformat()
+                )
+            
+            # Registrar el movimiento en la tabla de movimientos
+            self.supabase_service.insert_movimiento_inventario({
+                'codigo_interno': self.producto_seleccionado['codigo_interno'],
+                'tipo_producto': self.producto_seleccionado['tipo'],
+                'tipo_movimiento': tipo_movimiento_db,
+                'cantidad': cantidad if self.tipo_movimiento == "entrada" else -cantidad,
+                'stock_anterior': stock_anterior,
+                'stock_nuevo': nuevo_stock,
+                'motivo': motivo_texto,
+                'id_usuario': self.user_data.get('id_usuario'),
+                'fecha': datetime.now().isoformat()
+            })
             
             show_success_dialog(
                 self,
@@ -442,12 +417,6 @@ class MovimientoInventarioWindow(QWidget):
             self.limpiar_formulario()
             
         except Exception as e:
-            # Asegurar rollback en caso de error
-            try:
-                self.pg_manager.connection.rollback()
-            except Exception as rollback_error:
-                logging.error(f"Error en rollback: {rollback_error}")
-                
             logging.error(f"Error registrando movimiento: {e}")
             show_error_dialog(
                 self,

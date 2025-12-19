@@ -326,46 +326,41 @@ class NuevoProductoWindow(QWidget):
         
         try:
             # Buscar si ya existe el código de barras
-            with self.pg_manager.connection.cursor() as cursor:
-                # Buscar en productos varios
-                cursor.execute('''
-                    SELECT codigo_interno, nombre 
-                    FROM ca_productos_varios 
-                    WHERE codigo_barras = %s
-                ''', (codigo_barras,))
-                
-                producto_varios = cursor.fetchone()
-                
-                if producto_varios:
-                    logging.warning(f"Código de barras duplicado en productos varios: {codigo_barras}")
-                    show_warning_dialog(
-                        self,
-                        "Código de barras duplicado",
-                        f"El código de barras ya existe en:\n\n"
-                        f"Código Interno: {producto_varios['codigo_interno']}\n"
-                        f"Nombre: {producto_varios['nombre']}"
-                    )
-                    self.codigo_barras_input.setFocus()
-                    self.codigo_barras_input.selectAll()
-                    return
-                
-                # Buscar en suplementos
-                cursor.execute('''
-                    SELECT codigo_interno, nombre 
-                    FROM ca_suplementos 
-                    WHERE codigo_barras = %s
-                ''', (codigo_barras,))
-                
-                producto_suplemento = cursor.fetchone()
-                
-                if producto_suplemento:
-                    logging.warning(f"Código de barras duplicado en suplementos: {codigo_barras}")
-                    show_warning_dialog(
-                        self,
-                        "Código de barras duplicado",
-                        f"El código de barras ya existe en:\n\n"
-                        f"Código Interno: {producto_suplemento['codigo_interno']}\n"
-                    f"Nombre: {producto_suplemento['nombre']}"
+            # Buscar en productos varios
+            response_varios = self.pg_manager.client.table('ca_productos_varios').select(
+                'codigo_interno, nombre'
+            ).eq('codigo_barras', codigo_barras).execute()
+            
+            producto_varios = response_varios.data[0] if response_varios.data else None
+            
+            if producto_varios:
+                logging.warning(f"Código de barras duplicado en productos varios: {codigo_barras}")
+                show_warning_dialog(
+                    self,
+                    "Código de barras duplicado",
+                    f"El código de barras ya existe en:\n\n"
+                    f"Código Interno: {producto_varios['codigo_interno']}\n"
+                    f"Nombre: {producto_varios['nombre']}"
+                )
+                self.codigo_barras_input.setFocus()
+                self.codigo_barras_input.selectAll()
+                return
+            
+            # Buscar en suplementos
+            response_suplemento = self.pg_manager.client.table('ca_suplementos').select(
+                'codigo_interno, nombre'
+            ).eq('codigo_barras', codigo_barras).execute()
+            
+            producto_suplemento = response_suplemento.data[0] if response_suplemento.data else None
+            
+            if producto_suplemento:
+                logging.warning(f"Código de barras duplicado en suplementos: {codigo_barras}")
+                show_warning_dialog(
+                    self,
+                    "Código de barras duplicado",
+                    f"El código de barras ya existe en:\n\n"
+                    f"Código Interno: {producto_suplemento['codigo_interno']}\n"
+                f"Nombre: {producto_suplemento['nombre']}"
                 )
                 self.codigo_barras_input.setFocus()
                 self.codigo_barras_input.selectAll()
@@ -413,29 +408,25 @@ class NuevoProductoWindow(QWidget):
     def cargar_ubicaciones(self):
         """Cargar ubicaciones desde el catálogo ca_ubicaciones"""
         try:
-            with self.pg_manager.connection.cursor() as cursor:
-                cursor.execute('''
-                    SELECT id_ubicacion, nombre 
-                    FROM ca_ubicaciones 
-                    WHERE activa = TRUE
-                    ORDER BY nombre
-                ''')
-                
-                ubicaciones = cursor.fetchall()
-                
-                # Agregar ubicaciones al combo
-                for ubicacion in ubicaciones:
-                    self.ubicacion_combo.addItem(
-                        ubicacion['nombre'],
-                        ubicacion['id_ubicacion']
-                    )
-                
-                if ubicaciones:
-                    # Seleccionar la segunda opción (primera ubicación real) por defecto
-                    self.ubicacion_combo.setCurrentIndex(1)
-                    logging.info(f"Cargadas {len(ubicaciones)} ubicaciones")
-                else:
-                    logging.warning("No hay ubicaciones disponibles en el catálogo")
+            response = self.pg_manager.client.table('ca_ubicaciones').select(
+                'id_ubicacion, nombre'
+            ).eq('activa', True).order('nombre', desc=False).execute()
+            
+            ubicaciones = response.data
+            
+            # Agregar ubicaciones al combo
+            for ubicacion in ubicaciones:
+                self.ubicacion_combo.addItem(
+                    ubicacion['nombre'],
+                    ubicacion['id_ubicacion']
+                )
+            
+            if ubicaciones:
+                # Seleccionar la segunda opción (primera ubicación real) por defecto
+                self.ubicacion_combo.setCurrentIndex(1)
+                logging.info(f"Cargadas {len(ubicaciones)} ubicaciones")
+            else:
+                logging.warning("No hay ubicaciones disponibles en el catálogo")
                     
         except Exception as e:
             logging.error(f"Error cargando ubicaciones: {e}")

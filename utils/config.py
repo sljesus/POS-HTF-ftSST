@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 class Config:
     def __init__(self):
         # Cargar variables de entorno
-        load_dotenv()
+        load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'), encoding='utf-8')
         
         # Configuración de la base de datos SQLite
         self.DATABASE_PATH = os.path.join(os.path.dirname(__file__), '..', 'database', 'pos_htf.db')
@@ -16,6 +16,8 @@ class Config:
         # Configuración de Supabase
         self.SUPABASE_URL = os.getenv('SUPABASE_URL', '')
         self.SUPABASE_KEY = os.getenv('SUPABASE_KEY', '')
+        # SUPABASE_ROLE_KEY bypasea RLS; fallback a SUPABASE_KEY si no existe
+        self.SUPABASE_ROLE_KEY = os.getenv('SUPABASE_ROLE_KEY', os.getenv('SUPABASE_KEY', ''))
         
         # Configuración de la aplicación
         self.APP_NAME = "HTF Gimnasio POS"
@@ -36,7 +38,9 @@ class Config:
         self.DB_PORT = os.getenv('DB_PORT', '5432')
         self.DB_NAME = os.getenv('DB_NAME', 'htf_gimnasio')
         self.DB_USER = os.getenv('DB_USER', 'postgres')
-        self.DB_PASSWORD = os.getenv('DB_PASSWORD', 'password')
+        # Eliminar comillas si las hay
+        password = os.getenv('DB_PASSWORD', 'password')
+        self.DB_PASSWORD = password.strip('"\'') if password else 'password'
 
     def validate_config(self):
         """Validar configuración básica"""
