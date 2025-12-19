@@ -187,7 +187,7 @@ class MainPOSWindow(QMainWindow):
         layout = create_page_layout("PUNTO DE VENTA")
         page.setLayout(layout)
         
-        # Grid de tiles
+        # Grid de tiles - 2 filas x 2 columnas
         grid = create_tile_grid_layout()
         
         # Botones de acciones usando componente TileButton
@@ -199,9 +199,9 @@ class MainPOSWindow(QMainWindow):
         btn_ventas_dia.clicked.connect(self.abrir_ventas_dia)
         grid.addWidget(btn_ventas_dia, 0, 1)
         
-        btn_escanear_pago = TileButton("Escanear\nCódigo Pago", "mdi.qrcode-scan", WindowsPhoneTheme.TILE_GREEN)
+        btn_escanear_pago = TileButton("Escanear Código\nPago", "mdi.qrcode-scan", WindowsPhoneTheme.TILE_GREEN)
         btn_escanear_pago.clicked.connect(self.debug_escaneo_pago)
-        grid.addWidget(btn_escanear_pago, 0, 2)
+        grid.addWidget(btn_escanear_pago, 1, 0)
         
         btn_cierre = TileButton("Cierre de Caja", "fa5s.lock", WindowsPhoneTheme.TILE_MAGENTA)
         btn_cierre.clicked.connect(self.abrir_cierre_caja)

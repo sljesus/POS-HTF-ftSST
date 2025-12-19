@@ -33,6 +33,10 @@ from ui.components import (
     show_confirmation_dialog
 )
 
+# Importar gestores de impresión
+from escpos_printer import TicketPrinter
+from windows_printer_manager import TicketPrinterWindows, WindowsPrinterManager
+
 
 class NuevaVentaWindow(QWidget):
     """Widget para realizar nueva venta"""
@@ -351,6 +355,9 @@ class NuevaVentaWindow(QWidget):
     
     def procesar_codigo_barras(self):
         """Procesar código de barras del escáner (cuando se presiona Enter)"""
+        import time
+        
+        tiempo_inicio = time.perf_counter()
         codigo = self.search_bar.text().strip()
         
         # Limpiar campo inmediatamente para permitir siguiente escaneo
@@ -360,23 +367,17 @@ class NuevaVentaWindow(QWidget):
             return
         
         try:
-            # Buscar producto por código exacto
-            productos = self.pg_manager.search_products(codigo)
-            
-            # Filtrar por código de barras exacto
-            producto_encontrado = None
-            for p in productos:
-                # psycopg2.extras.RealDictRow se accede como diccionario con []
-                codigo_barras = p['codigo_barras'] if p['codigo_barras'] else None
-                if codigo_barras == codigo:
-                    producto_encontrado = p
-                    break
+            # Búsqueda rápida por código de barras exacto
+            tiempo_busqueda = time.perf_counter()
+            producto_encontrado = self.pg_manager.get_product_by_barcode(codigo)
+            tiempo_busqueda_total = (time.perf_counter() - tiempo_busqueda) * 1000
             
             if producto_encontrado:
                 # Verificar que tenga stock
                 if producto_encontrado['stock_actual'] > 0:
                     self.agregar_al_carrito(producto_encontrado)
-                    logging.info(f"Producto agregado automáticamente: {producto_encontrado['nombre']}")
+                    tiempo_total = (time.perf_counter() - tiempo_inicio) * 1000
+                    logging.info(f"✓ Producto agregado: {producto_encontrado['nombre']} | Búsqueda: {tiempo_busqueda_total:.1f}ms | Total: {tiempo_total:.1f}ms")
                 else:
                     show_warning_dialog(
                         self,
@@ -384,9 +385,13 @@ class NuevaVentaWindow(QWidget):
                         f"El producto {producto_encontrado['nombre']} no tiene stock disponible"
                     )
             else:
-                # Si no se encontró por código exacto, hacer búsqueda normal
+                # Si no se encontró por código de barras, hacer búsqueda general
+                tiempo_busqueda2 = time.perf_counter()
                 self.search_bar.search_input.setText(codigo)
                 self.buscar_productos()
+                tiempo_busqueda2_total = (time.perf_counter() - tiempo_busqueda2) * 1000
+                tiempo_total = (time.perf_counter() - tiempo_inicio) * 1000
+                logging.info(f"⊘ Código no encontrado (búsqueda general): {tiempo_busqueda2_total:.1f}ms | Total: {tiempo_total:.1f}ms")
                 
         except Exception as e:
             logging.error(f"Error al procesar código de barras: {e}")
@@ -905,9 +910,9 @@ class TicketVentaDialog(QDialog):
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(10)
         
-        btn_imprimir = QPushButton("Imprimir")
-        btn_imprimir.setMinimumHeight(50)
-        btn_imprimir.setStyleSheet(f"""
+        btn_imprimir_termica = QPushButton("Imprimir Térmica")
+        btn_imprimir_termica.setMinimumHeight(50)
+        btn_imprimir_termica.setStyleSheet(f"""
             QPushButton {{
                 background-color: {WindowsPhoneTheme.TILE_BLUE};
                 color: white;
@@ -920,7 +925,24 @@ class TicketVentaDialog(QDialog):
                 background-color: {WindowsPhoneTheme.TILE_TEAL};
             }}
         """)
-        btn_imprimir.clicked.connect(self.imprimir_ticket)
+        btn_imprimir_termica.clicked.connect(self.imprimir_ticket_escpos)
+        
+        btn_imprimir_sistema = QPushButton("Imprimir Sistema")
+        btn_imprimir_sistema.setMinimumHeight(50)
+        btn_imprimir_sistema.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {WindowsPhoneTheme.TILE_GREEN};
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 14px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {WindowsPhoneTheme.TILE_TEAL};
+            }}
+        """)
+        btn_imprimir_sistema.clicked.connect(self.imprimir_ticket)
         
         btn_cerrar = QPushButton("Cerrar")
         btn_cerrar.setMinimumHeight(50)
@@ -939,7 +961,8 @@ class TicketVentaDialog(QDialog):
         """)
         btn_cerrar.clicked.connect(self.accept)
         
-        buttons_layout.addWidget(btn_imprimir)
+        buttons_layout.addWidget(btn_imprimir_termica)
+        buttons_layout.addWidget(btn_imprimir_sistema)
         buttons_layout.addWidget(btn_cerrar)
         
         layout.addLayout(buttons_layout)
@@ -982,10 +1005,91 @@ class TicketVentaDialog(QDialog):
         return ticket
         
     def imprimir_ticket(self):
-        """Imprimir el ticket"""
+        """Imprimir el ticket usando impresora del sistema"""
         printer = QPrinter(QPrinter.HighResolution)
         dialog = QPrintDialog(printer, self)
         
         if dialog.exec() == QPrintDialog.Accepted:
             self.ticket_text.document().print(printer)
             show_success_dialog(self, "Éxito", "Ticket impreso correctamente.")
+    
+    def imprimir_ticket_escpos(self):
+        """Imprimir el ticket en impresora térmica o Windows"""
+        try:
+            # Preparar datos del ticket
+            productos_formateados = []
+            for item in self.carrito:
+                productos_formateados.append({
+                    'nombre': item['nombre'],
+                    'cantidad': item['cantidad'],
+                    'precio': item['precio'],
+                    'subtotal': item['subtotal']
+                })
+            
+            datos_ticket = {
+                'tienda': 'HTF GIMNASIO',
+                'subtitulo': 'PUNTO DE VENTA',
+                'numero_ticket': self.venta_id,
+                'fecha_hora': datetime.now().strftime("%d/%m/%Y %H:%M"),
+                'cajero': self.usuario,
+                'productos': productos_formateados,
+                'total': self.total,
+                'metodo_pago': 'EFECTIVO',
+                'abrir_caja': True,
+                'cortar': True
+            }
+            
+            # OPCIÓN 1: Intentar con Windows Generic/Text Only
+            logging.info("Intentando impresión con Windows Generic/Text Only...")
+            nombre_impresora = WindowsPrinterManager.obtener_impresora_por_tipo("Generic")
+            
+            if nombre_impresora:
+                printer_windows = TicketPrinterWindows(nombre_impresora)
+                if printer_windows.conectar():
+                    if printer_windows.imprimir_ticket(datos_ticket):
+                        show_success_dialog(
+                            self,
+                            "Éxito",
+                            f"Ticket impreso en: {nombre_impresora}"
+                        )
+                        printer_windows.desconectar()
+                        return
+                    printer_windows.desconectar()
+            
+            # OPCIÓN 2: Intentar con impresora ESC/POS serial
+            logging.info("Intentando impresión ESC/POS...")
+            puerto = "COM3"
+            
+            printer_escpos = TicketPrinter(puerto)
+            
+            if printer_escpos.conectar():
+                if printer_escpos.imprimir_ticket(datos_ticket):
+                    show_success_dialog(
+                        self,
+                        "Éxito",
+                        "Ticket impreso en la impresora térmica.\n"
+                        "Caja registradora abierta."
+                    )
+                    printer_escpos.desconectar()
+                    return
+                printer_escpos.desconectar()
+            
+            # Si llegamos aquí, ambas fallaron
+            show_error_dialog(
+                self,
+                "Error de Impresión",
+                "No se pudo imprimir el ticket.\n\n"
+                "Verifica que:\n"
+                "- La impresora esté conectada\n"
+                "- Los drivers estén instalados\n"
+                "- Intenta reconectar la impresora\n\n"
+                "Alternativa: Usa 'Imprimir Sistema'"
+            )
+            
+        except Exception as e:
+            logging.error(f"Error en impresión: {e}")
+            show_error_dialog(
+                self,
+                "Error",
+                f"Error en impresión:\n{str(e)}"
+            )

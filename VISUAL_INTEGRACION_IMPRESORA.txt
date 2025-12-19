@@ -1,0 +1,254 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                  INTEGRACIÓN DE IMPRESORA TÉRMICA ESC/POS                       ║
+║                        HTF GIMNASIO POS - DICIEMBRE 2025                        ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ✅ ESTADO: INTEGRACIÓN COMPLETADA Y LISTA PARA USAR                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+📦 COMPONENTES INSTALADOS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. escpos_printer.py
+   ├─ EscPosDriver (Clase base)
+   │  ├─ conectar()
+   │  ├─ desconectar()
+   │  ├─ enviar_comando()
+   │  ├─ alineación (centro, izquierda, derecha)
+   │  ├─ estilos (negrita, tamaños)
+   │  ├─ cortar_papel()
+   │  └─ abrir_caja_registradora()
+   │
+   └─ TicketPrinter (Especializada)
+      ├─ imprimir_titulo_tienda()
+      ├─ imprimir_encabezado_ticket()
+      ├─ imprimir_producto()
+      ├─ imprimir_total()
+      ├─ imprimir_pie()
+      └─ imprimir_ticket(datos)  ← Main
+
+2. config_impresora.py
+   ├─ ConfiguradorImpresora
+   │  ├─ cargar_config()
+   │  ├─ guardar_config()
+   │  ├─ obtener_puertos_disponibles()
+   │  └─ probar_conexion()
+   │
+   └─ config_impresora.json (generado automáticamente)
+
+3. test_impresora.py
+   ├─ Menú interactivo
+   ├─ Detectar puertos COM
+   ├─ Probar conexión
+   ├─ Imprimir ticket de prueba
+   └─ Diagnosticar problemas
+
+4. Modificaciones en ui/ventas/nueva_venta.py
+   └─ Nuevo botón: "Imprimir Térmica"
+   └─ Nuevo método: imprimir_ticket_escpos()
+
+🔧 CONFIGURACIÓN ACTUAL
+═══════════════════════════════════════════════════════════════════════════════
+
+Puerto COM:          COM3
+Velocidad (baud):    115200
+Timeout:             2.0 segundos
+Tienda:              HTF GIMNASIO
+Subtítulo:           PUNTO DE VENTA
+Abrir caja:          Automático ✓
+Cortar papel:        Automático ✓
+
+🚀 FLUJO DE USO
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. USUARIO REALIZA VENTA                                        │
+│    - Escanea o busca productos                                  │
+│    - Agrega al carrito                                          │
+│    - Define cantidad y confirma                                 │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. FINALIZAR VENTA                                              │
+│    - Presiona botón "Pagar" o "Finalizar"                       │
+│    - Sistema registra la venta                                  │
+│    - Se abre diálogo de ticket                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. DIÁLOGO DE TICKET CON 3 OPCIONES                            │
+│                                                                 │
+│  ┌─────────────────────────────────────┐                        │
+│  │ Ticket #001234                      │                        │
+│  │ 19/12/2025 15:30                    │                        │
+│  │ ...                                 │                        │
+│  ├─────────────────────────────────────┤                        │
+│  │ [🖨️  Imprimir Térmica]             │ ← ESC/POS             │
+│  │ [🖨️  Imprimir Sistema]             │ ← Windows             │
+│  │ [❌ Cerrar]                        │                        │
+│  └─────────────────────────────────────┘                        │
+│                                                                 │
+│ Opción A: Usuario presiona "Imprimir Térmica"                 │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 4. PROCESO DE IMPRESIÓN ESC/POS                                 │
+│                                                                 │
+│  imprimir_ticket_escpos()                                       │
+│   ├─ Conecta a puerto COM3                                      │
+│   ├─ Inicializa impresora                                       │
+│   ├─ Prepara datos del ticket                                   │
+│   ├─ Formatea y envía:                                          │
+│   │  ├─ Título (HTF GIMNASIO)                                  │
+│   │  ├─ Encabezado (#001234, Fecha, Cajero)                    │
+│   │  ├─ Productos                                              │
+│   │  ├─ Total                                                  │
+│   │  └─ Pie (Gracias, Vuelva pronto)                           │
+│   ├─ Abre caja registradora (12V)                              │
+│   ├─ Corta papel automático                                     │
+│   ├─ Desconecta impresora                                      │
+│   └─ Muestra mensaje de éxito                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 5. RESULTADO                                                    │
+│    [IMPRESORA TÉRMICA]                                          │
+│    ════════════════════                                         │
+│         HTF GIMNASIO                                            │
+│        PUNTO DE VENTA                                           │
+│    ════════════════════                                         │
+│    Ticket: #001234                                              │
+│    Fecha: 19/12/2025 15:30                                      │
+│    Cajero: Juan Pérez                                           │
+│    ────────────────────                                         │
+│    Bebida Energética                                            │
+│      2 x $5.00        $10.00                                     │
+│    Toalla Microfibra                                            │
+│      1 x $15.00       $15.00                                     │
+│    Shaker Botella                                               │
+│      1 x $8.50        $8.50                                      │
+│    ────────────────────                                         │
+│              TOTAL:    $33.50                                    │
+│    ════════════════════                                         │
+│         PAGO EFECTIVO                                           │
+│    ────────────────────                                         │
+│    ¡Gracias por su compra!                                      │
+│       Vuelva pronto                                             │
+│    ════════════════════                                         │
+│                                                                 │
+│    [CAJA REGISTRADORA SE ABRE]                                 │
+│    [PAPEL SE CORTA AUTOMÁTICAMENTE]                            │
+└─────────────────────────────────────────────────────────────────┘
+
+🧪 PRUEBAS ANTES DE USAR
+═══════════════════════════════════════════════════════════════════════════════
+
+EJECUTAR ESTOS COMANDOS:
+
+1. Detectar puertos:
+   $ python test_impresora.py
+   Seleccionar opción 1
+
+2. Probar conexión:
+   $ python test_impresora.py
+   Seleccionar opción 2
+   Ingresar puerto (ej: COM3)
+
+3. Imprimir ticket de prueba:
+   $ python test_impresora.py
+   Seleccionar opción 3
+   Ingresar puerto (ej: COM3)
+
+4. Ejecutar todas las pruebas:
+   $ python test_impresora.py
+   Seleccionar opción 4 ← RECOMENDADO
+
+📋 IMPRESORA SOPORTADA
+═══════════════════════════════════════════════════════════════════════════════
+
+Modelo:           EC-PM-58110-USB
+Fabricante:       EC Line
+Protocolo:        ESC/POS
+Ancho papel:      58mm (42 caracteres)
+Velocidad impre:  110mm/seg
+Interfaz:         Serial + USB
+Alimentación:     12V ⚡
+Caja registrador: Sí, conectada a 12V
+
+COMPATIBLE CON: Epson, Star Micronics, Zebra y similares ESC/POS
+
+⚠️  REQUERIMIENTOS
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ Python 3.8+
+✓ pyserial (instalado)
+✓ PySide6 (para UI)
+✓ Drivers de impresora EC-PM-58110 (descargar de fabricante)
+✓ Cable USB A a B
+✓ Impresora conectada y encendida
+
+INSTALAR DRIVERS: https://ecline.com.br/ o buscar "EC-PM-58110-USB driver"
+
+🔗 CONEXIÓN FÍSICA
+═══════════════════════════════════════════════════════════════════════════════
+
+Impresora USB ──── Cable USB ──── Computadora (Puerto USB)
+Caja Registr. ──── Cable 12V ──── Fuente de poder (12V)
+
+Verificar en:
+1. Windows Device Manager → Puertos (COM y LPT)
+2. O ejecutar: python test_impresora.py → Opción 1
+
+💾 ARCHIVOS GENERADOS
+═══════════════════════════════════════════════════════════════════════════════
+
+config_impresora.json (automático después de primera ejecución)
+migracion_supabase.log (si migración se ejecuta)
+pos_htf.log (logs del sistema)
+
+❓ PREGUNTAS FRECUENTES
+═══════════════════════════════════════════════════════════════════════════════
+
+P: ¿Dónde está el puerto COM de mi impresora?
+R: Ejecuta test_impresora.py opción 1, o abre Administrador de dispositivos
+
+P: ¿Puedo usar otra impresora ESC/POS?
+R: Sí, cualquier impresora ESC/POS es compatible. Solo cambia el puerto COM
+
+P: ¿Qué pasa si no tengo caja registradora?
+R: Funciona normalmente. Solo desactiva "abrir_caja" en config_impresora.json
+
+P: ¿Se puede imprimir sin cortar papel?
+R: Sí, cambia "cortar_papel_automaticamente": false en config_impresora.json
+
+P: ¿Funciona en Mac/Linux?
+R: Sí, el código es multiplataforma. Solo ajusta los puertos (ttyUSB0, etc.)
+
+P: ¿Qué hago si dice "timeout"?
+R: Aumenta timeout_conexion en config_impresora.json (prueba 3.0 ó 4.0)
+
+🎯 PRÓXIMOS PASOS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. ✅ Instala drivers de EC-PM-58110
+2. ✅ Conecta impresora por USB
+3. ✅ Ejecuta: python test_impresora.py (opción 4)
+4. ✅ Si todo dice ✅, comienza a usar
+5. ❓ Cualquier error, ejecuta test_impresora.py para diagnóstico
+
+📞 SOPORTE TÉCNICO
+═══════════════════════════════════════════════════════════════════════════════
+
+Script de diagnóstico:    python test_impresora.py
+Documentación completa:   INTEGRACION_IMPRESORA_ESCPOS.md
+Logs del sistema:         pos_htf.log
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                        ✨ ¡LISTO PARA USAR! ✨                               ║
+║                                                                                ║
+║              Impresora térmica integrada en ventana de ventas                  ║
+║               Automático: Abre caja + Corta papel + Cierre                    ║
+║                                                                                ║
+║                 Cualquier duda → python test_impresora.py                      ║
+╚════════════════════════════════════════════════════════════════════════════════╝

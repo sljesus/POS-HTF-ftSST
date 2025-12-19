@@ -264,74 +264,281 @@ class PostgresManager:
             if not self.is_connected:
                 self.connect()
             
+            productos_resultado = []
+            
             # Obtener productos varios
-            response_varios = self.client.table('ca_productos_varios').select('*').eq('activo', True).execute()
-            productos = response_varios.data or []
+            response_varios = self.client.table('ca_productos_varios').select(
+                'id_producto, codigo_interno, nombre, precio_venta, categoria, codigo_barras'
+            ).eq('activo', True).execute()
             
             # Obtener suplementos
-            response_suplementos = self.client.table('ca_suplementos').select('*').eq('activo', True).execute()
-            productos.extend(response_suplementos.data or [])
+            response_suplementos = self.client.table('ca_suplementos').select(
+                'id_suplemento, codigo_interno, nombre, precio_venta, tipo, codigo_barras'
+            ).eq('activo', True).execute()
             
-            logging.info(f"Obtenidos {len(productos)} productos activos")
-            return productos
+            # Procesar productos varios
+            for prod_varios in (response_varios.data or []):
+                codigo_interno = prod_varios.get('codigo_interno')
+                
+                # Obtener stock del inventario
+                inv_response = self.client.table('inventario').select(
+                    'stock_actual, stock_minimo, id_ubicacion'
+                ).eq('codigo_interno', codigo_interno).eq('tipo_producto', 'varios').execute()
+                
+                stock_actual = 0
+                stock_minimo = 0
+                id_ubicacion = None
+                if inv_response.data:
+                    inv = inv_response.data[0]
+                    stock_actual = inv.get('stock_actual', 0)
+                    stock_minimo = inv.get('stock_minimo', 0)
+                    id_ubicacion = inv.get('id_ubicacion')
+                
+                productos_resultado.append({
+                    'id_producto': prod_varios.get('id_producto'),
+                    'codigo_interno': codigo_interno,
+                    'nombre': prod_varios.get('nombre'),
+                    'precio_venta': float(prod_varios.get('precio_venta', 0.0)),
+                    'categoria': prod_varios.get('categoria', 'General'),
+                    'codigo_barras': prod_varios.get('codigo_barras'),
+                    'stock_actual': stock_actual,
+                    'stock_minimo': stock_minimo,
+                    'tipo_producto': 'varios',
+                    'id_ubicacion': id_ubicacion
+                })
+            
+            # Procesar suplementos
+            for prod_suplemento in (response_suplementos.data or []):
+                codigo_interno = prod_suplemento.get('codigo_interno')
+                
+                # Obtener stock del inventario
+                inv_response = self.client.table('inventario').select(
+                    'stock_actual, stock_minimo, id_ubicacion'
+                ).eq('codigo_interno', codigo_interno).eq('tipo_producto', 'suplemento').execute()
+                
+                stock_actual = 0
+                stock_minimo = 0
+                id_ubicacion = None
+                if inv_response.data:
+                    inv = inv_response.data[0]
+                    stock_actual = inv.get('stock_actual', 0)
+                    stock_minimo = inv.get('stock_minimo', 0)
+                    id_ubicacion = inv.get('id_ubicacion')
+                
+                productos_resultado.append({
+                    'id_producto': prod_suplemento.get('id_suplemento'),  # Usar id_suplemento como id_producto
+                    'codigo_interno': codigo_interno,
+                    'nombre': prod_suplemento.get('nombre'),
+                    'precio_venta': float(prod_suplemento.get('precio_venta', 0.0)),
+                    'categoria': prod_suplemento.get('tipo', 'Suplemento'),
+                    'codigo_barras': prod_suplemento.get('codigo_barras'),
+                    'stock_actual': stock_actual,
+                    'stock_minimo': stock_minimo,
+                    'tipo_producto': 'suplemento',
+                    'id_ubicacion': id_ubicacion
+                })
+            
+            logging.info(f"Obtenidos {len(productos_resultado)} productos activos (con stock)")
+            return productos_resultado
         
         except Exception as e:
             logging.error(f"Error obteniendo productos: {e}")
             return []
     
     def search_products(self, search_text: str) -> List[Dict]:
-        """Buscar productos por código o nombre"""
+        """Buscar productos por código o nombre (CON STOCK INCLUIDO)"""
         try:
             if not self.is_connected:
                 self.connect()
             
             search_pattern = f"%{search_text}%"
-            productos = []
+            productos_resultado = []
             
             # Buscar en productos varios
-            response_varios = self.client.table('ca_productos_varios').select('*').or_(
+            response_varios = self.client.table('ca_productos_varios').select(
+                'id_producto, codigo_interno, nombre, precio_venta, categoria, codigo_barras'
+            ).or_(
                 f"nombre.ilike.{search_pattern},codigo_barras.ilike.{search_pattern},codigo_interno.ilike.{search_pattern}"
             ).eq('activo', True).execute()
-            
-            productos.extend(response_varios.data or [])
             
             # Buscar en suplementos
-            response_suplementos = self.client.table('ca_suplementos').select('*').or_(
+            response_suplementos = self.client.table('ca_suplementos').select(
+                'id_suplemento, codigo_interno, nombre, precio_venta, tipo, codigo_barras'
+            ).or_(
                 f"nombre.ilike.{search_pattern},codigo_barras.ilike.{search_pattern},codigo_interno.ilike.{search_pattern}"
             ).eq('activo', True).execute()
             
-            productos.extend(response_suplementos.data or [])
+            # Procesar productos varios
+            for prod_varios in (response_varios.data or []):
+                codigo_interno = prod_varios.get('codigo_interno')
+                
+                # Obtener stock del inventario
+                inv_response = self.client.table('inventario').select(
+                    'stock_actual, stock_minimo, id_ubicacion'
+                ).eq('codigo_interno', codigo_interno).eq('tipo_producto', 'varios').execute()
+                
+                stock_actual = 0
+                stock_minimo = 0
+                id_ubicacion = None
+                if inv_response.data:
+                    inv = inv_response.data[0]
+                    stock_actual = inv.get('stock_actual', 0)
+                    stock_minimo = inv.get('stock_minimo', 0)
+                    id_ubicacion = inv.get('id_ubicacion')
+                
+                productos_resultado.append({
+                    'id_producto': prod_varios.get('id_producto'),
+                    'codigo_interno': codigo_interno,
+                    'nombre': prod_varios.get('nombre'),
+                    'precio_venta': float(prod_varios.get('precio_venta', 0.0)),
+                    'categoria': prod_varios.get('categoria', 'General'),
+                    'codigo_barras': prod_varios.get('codigo_barras'),
+                    'stock_actual': stock_actual,
+                    'stock_minimo': stock_minimo,
+                    'tipo_producto': 'varios',
+                    'id_ubicacion': id_ubicacion
+                })
             
-            logging.info(f"Encontrados {len(productos)} productos para '{search_text}'")
-            return productos
+            # Procesar suplementos
+            for prod_suplemento in (response_suplementos.data or []):
+                codigo_interno = prod_suplemento.get('codigo_interno')
+                
+                # Obtener stock del inventario
+                inv_response = self.client.table('inventario').select(
+                    'stock_actual, stock_minimo, id_ubicacion'
+                ).eq('codigo_interno', codigo_interno).eq('tipo_producto', 'suplemento').execute()
+                
+                stock_actual = 0
+                stock_minimo = 0
+                id_ubicacion = None
+                if inv_response.data:
+                    inv = inv_response.data[0]
+                    stock_actual = inv.get('stock_actual', 0)
+                    stock_minimo = inv.get('stock_minimo', 0)
+                    id_ubicacion = inv.get('id_ubicacion')
+                
+                productos_resultado.append({
+                    'id_producto': prod_suplemento.get('id_suplemento'),  # Usar id_suplemento como id_producto
+                    'codigo_interno': codigo_interno,
+                    'nombre': prod_suplemento.get('nombre'),
+                    'precio_venta': float(prod_suplemento.get('precio_venta', 0.0)),
+                    'categoria': prod_suplemento.get('tipo', 'Suplemento'),
+                    'codigo_barras': prod_suplemento.get('codigo_barras'),
+                    'stock_actual': stock_actual,
+                    'stock_minimo': stock_minimo,
+                    'tipo_producto': 'suplemento',
+                    'id_ubicacion': id_ubicacion
+                })
+            
+            logging.info(f"Encontrados {len(productos_resultado)} productos para '{search_text}'")
+            return productos_resultado
             
         except Exception as e:
             logging.error(f"Error buscando productos: {e}")
             return []
     
     def get_product_by_barcode(self, barcode: str) -> Optional[Dict]:
-        """Buscar producto por código de barras"""
+        """Buscar producto por código de barras (RÁPIDO - búsqueda exacta con stock incluido)"""
+        import time
+        tiempo_inicio = time.perf_counter()
+        
         try:
             if not self.is_connected:
                 self.connect()
             
             # Buscar en productos varios
-            response_varios = self.client.table('ca_productos_varios').select('*').eq('codigo_barras', barcode).eq('activo', True).execute()
+            tiempo_varios = time.perf_counter()
+            response_varios = self.client.table('ca_productos_varios').select(
+                'id_producto, codigo_interno, nombre, precio_venta, categoria, codigo_barras'
+            ).eq('codigo_barras', barcode).eq('activo', True).execute()
+            tiempo_varios_ms = (time.perf_counter() - tiempo_varios) * 1000
             
             if response_varios.data:
-                return response_varios.data[0]
+                prod_varios = response_varios.data[0]
+                codigo_interno = prod_varios.get('codigo_interno')
+                
+                # Obtener stock del inventario
+                tiempo_stock = time.perf_counter()
+                inv_response = self.client.table('inventario').select(
+                    'stock_actual, stock_minimo, id_ubicacion'
+                ).eq('codigo_interno', codigo_interno).eq('tipo_producto', 'varios').execute()
+                tiempo_stock_ms = (time.perf_counter() - tiempo_stock) * 1000
+                
+                stock_actual = 0
+                stock_minimo = 0
+                id_ubicacion = None
+                if inv_response.data:
+                    inv = inv_response.data[0]
+                    stock_actual = inv.get('stock_actual', 0)
+                    stock_minimo = inv.get('stock_minimo', 0)
+                    id_ubicacion = inv.get('id_ubicacion')
+                
+                tiempo_total_ms = (time.perf_counter() - tiempo_inicio) * 1000
+                logging.info(f"✓ Encontrado en ca_productos_varios: {tiempo_varios_ms:.1f}ms + stock: {tiempo_stock_ms:.1f}ms = {tiempo_total_ms:.1f}ms total")
+                
+                return {
+                    'id_producto': prod_varios.get('id_producto'),
+                    'codigo_interno': codigo_interno,
+                    'nombre': prod_varios.get('nombre'),
+                    'precio_venta': float(prod_varios.get('precio_venta', 0.0)),
+                    'categoria': prod_varios.get('categoria', 'General'),
+                    'codigo_barras': prod_varios.get('codigo_barras'),
+                    'stock_actual': stock_actual,
+                    'stock_minimo': stock_minimo,
+                    'tipo_producto': 'varios',
+                    'id_ubicacion': id_ubicacion
+                }
             
             # Buscar en suplementos
-            response_suplementos = self.client.table('ca_suplementos').select('*').eq('codigo_barras', barcode).eq('activo', True).execute()
+            tiempo_suplementos = time.perf_counter()
+            response_suplementos = self.client.table('ca_suplementos').select(
+                'id_suplemento, codigo_interno, nombre, precio_venta, tipo, codigo_barras'
+            ).eq('codigo_barras', barcode).eq('activo', True).execute()
+            tiempo_suplementos_ms = (time.perf_counter() - tiempo_suplementos) * 1000
             
             if response_suplementos.data:
-                return response_suplementos.data[0]
+                prod_suplemento = response_suplementos.data[0]
+                codigo_interno = prod_suplemento.get('codigo_interno')
+                
+                # Obtener stock del inventario
+                tiempo_stock = time.perf_counter()
+                inv_response = self.client.table('inventario').select(
+                    'stock_actual, stock_minimo, id_ubicacion'
+                ).eq('codigo_interno', codigo_interno).eq('tipo_producto', 'suplemento').execute()
+                tiempo_stock_ms = (time.perf_counter() - tiempo_stock) * 1000
+                
+                stock_actual = 0
+                stock_minimo = 0
+                id_ubicacion = None
+                if inv_response.data:
+                    inv = inv_response.data[0]
+                    stock_actual = inv.get('stock_actual', 0)
+                    stock_minimo = inv.get('stock_minimo', 0)
+                    id_ubicacion = inv.get('id_ubicacion')
+                
+                tiempo_total_ms = (time.perf_counter() - tiempo_inicio) * 1000
+                logging.info(f"✓ Encontrado en ca_suplementos: {tiempo_varios_ms:.1f}ms + {tiempo_suplementos_ms:.1f}ms + stock: {tiempo_stock_ms:.1f}ms = {tiempo_total_ms:.1f}ms total")
+                
+                return {
+                    'id_producto': prod_suplemento.get('id_suplemento'),
+                    'codigo_interno': codigo_interno,
+                    'nombre': prod_suplemento.get('nombre'),
+                    'precio_venta': float(prod_suplemento.get('precio_venta', 0.0)),
+                    'categoria': prod_suplemento.get('tipo', 'Suplemento'),
+                    'codigo_barras': prod_suplemento.get('codigo_barras'),
+                    'stock_actual': stock_actual,
+                    'stock_minimo': stock_minimo,
+                    'tipo_producto': 'suplemento',
+                    'id_ubicacion': id_ubicacion
+                }
             
-            logging.warning(f"Producto con código de barras {barcode} no encontrado")
+            tiempo_total_ms = (time.perf_counter() - tiempo_inicio) * 1000
+            logging.warning(f"✗ Código de barras {barcode} no encontrado: {tiempo_varios_ms:.1f}ms + {tiempo_suplementos_ms:.1f}ms = {tiempo_total_ms:.1f}ms")
             return None
         
         except Exception as e:
-            logging.error(f"Error buscando producto por código de barras: {e}")
+            tiempo_total_ms = (time.perf_counter() - tiempo_inicio) * 1000
+            logging.error(f"Error buscando producto por código de barras ({tiempo_total_ms:.1f}ms): {e}")
             return None
     
     def get_product_by_code(self, code: str) -> Optional[Dict]:
@@ -357,6 +564,80 @@ class PostgresManager:
         
         except Exception as e:
             logging.error(f"Error buscando producto por código interno: {e}")
+            return None
+    
+    def get_product_with_stock(self, codigo_interno: str) -> Optional[Dict]:
+        """Obtener producto completo con stock actual desde inventario
+        
+        Busca el producto en ca_productos_varios o ca_suplementos y agrega el stock
+        desde la tabla inventario.
+        
+        Returns:
+            Dict con campos: nombre, precio_venta, stock_actual, tipo_producto, etc.
+            O None si no encuentra el producto
+        """
+        try:
+            if not self.is_connected:
+                self.connect()
+            
+            # Buscar en productos varios
+            response_varios = self.client.table('ca_productos_varios').select(
+                'codigo_interno, nombre, precio_venta, categoria, codigo_barras'
+            ).eq('codigo_interno', codigo_interno).eq('activo', True).execute()
+            
+            if response_varios.data:
+                producto = response_varios.data[0]
+                tipo_producto = 'varios'
+            else:
+                # Buscar en suplementos
+                response_suplementos = self.client.table('ca_suplementos').select(
+                    'codigo_interno, nombre, precio_venta, tipo, codigo_barras'
+                ).eq('codigo_interno', codigo_interno).eq('activo', True).execute()
+                
+                if response_suplementos.data:
+                    producto = response_suplementos.data[0]
+                    tipo_producto = 'suplemento'
+                else:
+                    logging.warning(f"Producto con código interno {codigo_interno} no encontrado")
+                    return None
+            
+            # Obtener stock del inventario
+            response_inventario = self.client.table('inventario').select(
+                'stock_actual, stock_minimo, id_ubicacion'
+            ).eq('codigo_interno', codigo_interno).eq('tipo_producto', tipo_producto).execute()
+            
+            stock_actual = 0
+            stock_minimo = 0
+            id_ubicacion = None
+            
+            if response_inventario.data:
+                inv = response_inventario.data[0]
+                stock_actual = inv.get('stock_actual', 0)
+                stock_minimo = inv.get('stock_minimo', 0)
+                id_ubicacion = inv.get('id_ubicacion')
+            
+            # Combinar datos
+            resultado = {
+                'codigo_interno': producto.get('codigo_interno'),
+                'nombre': producto.get('nombre'),
+                'precio_venta': float(producto.get('precio_venta', 0.0)),
+                'codigo_barras': producto.get('codigo_barras'),
+                'stock_actual': stock_actual,
+                'stock_minimo': stock_minimo,
+                'tipo_producto': tipo_producto,
+                'id_ubicacion': id_ubicacion
+            }
+            
+            # Agregar campo de categoría según tipo
+            if tipo_producto == 'varios':
+                resultado['categoria'] = producto.get('categoria', 'General')
+            else:
+                resultado['categoria'] = producto.get('tipo', 'Suplemento')
+            
+            return resultado
+            
+        except Exception as e:
+            logging.error(f"Error obteniendo producto con stock: {e}")
             return None
     
     # ========== VENTAS ==========
@@ -606,6 +887,288 @@ class PostgresManager:
         except Exception as e:
             logging.error(f"Error creando inventario: {e}")
             return False
+    
+    def obtener_inventario_completo(self) -> List[Dict]:
+        """Obtener inventario completo con datos de productos (JOIN con ca_productos_varios, ca_suplementos y ca_ubicaciones)"""
+        try:
+            if not self.is_connected:
+                self.connect()
+            
+            # Obtener inventario con productos varios
+            response_varios = self.client.table('inventario').select(
+                'id_inventario, codigo_interno, tipo_producto, stock_actual, stock_minimo, id_ubicacion, seccion, activo'
+            ).eq('tipo_producto', 'varios').eq('activo', True).execute()
+            
+            productos_varios = response_varios.data or []
+            
+            # Obtener inventario con suplementos
+            response_suplementos = self.client.table('inventario').select(
+                'id_inventario, codigo_interno, tipo_producto, stock_actual, stock_minimo, id_ubicacion, seccion, activo'
+            ).eq('tipo_producto', 'suplemento').eq('activo', True).execute()
+            
+            productos_suplementos = response_suplementos.data or []
+            
+            # Obtener todas las ubicaciones para mapeo
+            ubicaciones_map = {}
+            try:
+                response_ubicaciones = self.client.table('ca_ubicaciones').select(
+                    'id_ubicacion, nombre'
+                ).execute()
+                ubicaciones_map = {
+                    u['id_ubicacion']: u['nombre'] 
+                    for u in (response_ubicaciones.data or [])
+                }
+            except Exception as e:
+                logging.warning(f"No se pudieron obtener ubicaciones: {e}")
+            
+            # Obtener detalles de productos varios
+            productos_varios_data = {}
+            if productos_varios:
+                codigos_varios = [p['codigo_interno'] for p in productos_varios]
+                response = self.client.table('ca_productos_varios').select(
+                    'codigo_interno, nombre, precio_venta, categoria, codigo_barras'
+                ).in_('codigo_interno', codigos_varios).execute()
+                
+                productos_varios_data = {p['codigo_interno']: p for p in (response.data or [])}
+            
+            # Obtener detalles de suplementos
+            productos_suplementos_data = {}
+            if productos_suplementos:
+                codigos_suplementos = [p['codigo_interno'] for p in productos_suplementos]
+                response = self.client.table('ca_suplementos').select(
+                    'codigo_interno, nombre, precio_venta, tipo, codigo_barras'
+                ).in_('codigo_interno', codigos_suplementos).execute()
+                
+                productos_suplementos_data = {p['codigo_interno']: p for p in (response.data or [])}
+            
+            # Combinar datos
+            inventario_completo = []
+            
+            # Agregar productos varios
+            for inv in productos_varios:
+                codigo = inv['codigo_interno']
+                producto = productos_varios_data.get(codigo, {})
+                id_ubicacion = inv.get('id_ubicacion')
+                ubicacion_nombre = ubicaciones_map.get(id_ubicacion, 'N/A')
+                
+                inventario_completo.append({
+                    'id_inventario': inv['id_inventario'],
+                    'codigo_interno': codigo,
+                    'nombre': producto.get('nombre', 'N/A'),
+                    'precio': float(producto.get('precio_venta', 0.0)),
+                    'categoria': producto.get('categoria', 'General'),
+                    'codigo_barras': producto.get('codigo_barras'),
+                    'seccion': inv.get('seccion', 'N/A'),
+                    'tipo_producto': inv['tipo_producto'],
+                    'stock_actual': inv['stock_actual'],
+                    'stock_minimo': inv['stock_minimo'],
+                    'id_ubicacion': id_ubicacion,
+                    'ubicacion': ubicacion_nombre,
+                    'activo': inv['activo']
+                })
+            
+            # Agregar suplementos
+            for inv in productos_suplementos:
+                codigo = inv['codigo_interno']
+                producto = productos_suplementos_data.get(codigo, {})
+                id_ubicacion = inv.get('id_ubicacion')
+                ubicacion_nombre = ubicaciones_map.get(id_ubicacion, 'N/A')
+                
+                inventario_completo.append({
+                    'id_inventario': inv['id_inventario'],
+                    'codigo_interno': codigo,
+                    'nombre': producto.get('nombre', 'N/A'),
+                    'precio': float(producto.get('precio_venta', 0.0)),
+                    'categoria': producto.get('tipo', 'Suplemento'),  # Para suplementos usamos 'tipo' como categoría
+                    'codigo_barras': producto.get('codigo_barras'),
+                    'seccion': inv.get('seccion', 'N/A'),
+                    'tipo_producto': inv['tipo_producto'],
+                    'stock_actual': inv['stock_actual'],
+                    'stock_minimo': inv['stock_minimo'],
+                    'id_ubicacion': id_ubicacion,
+                    'ubicacion': ubicacion_nombre,
+                    'activo': inv['activo']
+                })
+            
+            logging.info(f"✅ Inventario completo cargado: {len(inventario_completo)} productos")
+            return inventario_completo
+            
+        except Exception as e:
+            logging.error(f"Error obteniendo inventario completo: {e}")
+            return []
+    
+    def actualizar_stock(self, codigo_interno: str, tipo_producto: str, nuevo_stock: int, 
+                        fecha_entrada: str = None, fecha_salida: str = None) -> bool:
+        """Actualizar stock en la tabla inventario
+        
+        Args:
+            codigo_interno: Código del producto
+            tipo_producto: 'varios' o 'suplemento'
+            nuevo_stock: Nuevo valor de stock
+            fecha_entrada: Timestamp de entrada (opcional)
+            fecha_salida: Timestamp de salida (opcional)
+        
+        Returns:
+            True si la actualización fue exitosa, False en caso contrario
+        """
+        try:
+            if not self.is_connected:
+                self.connect()
+            
+            update_data = {'stock_actual': nuevo_stock}
+            
+            if fecha_entrada:
+                update_data['fecha_ultima_entrada'] = fecha_entrada
+            
+            if fecha_salida:
+                update_data['fecha_ultima_salida'] = fecha_salida
+            
+            response = self.client.table('inventario').update(update_data).eq(
+                'codigo_interno', codigo_interno
+            ).eq('tipo_producto', tipo_producto).execute()
+            
+            logging.info(f"✅ Stock actualizado: {codigo_interno} → {nuevo_stock} unidades")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error actualizando stock: {e}")
+            return False
+    
+    def registrar_movimiento_inventario(self, movimiento_data: Dict) -> bool:
+        """Registrar un movimiento en la tabla movimientos_inventario
+        
+        Args:
+            movimiento_data: Dict con campos:
+                - codigo_interno (str)
+                - tipo_producto (str): 'varios' o 'suplemento'
+                - tipo_movimiento (str): 'entrada', 'salida', 'venta', 'merma', 'ajuste'
+                - cantidad (int): cantidad del movimiento (positivo para entrada, negativo para salida)
+                - stock_anterior (int)
+                - stock_nuevo (int)
+                - motivo (str, opcional)
+                - id_usuario (int, opcional)
+                - id_venta (int, opcional)
+        
+        Returns:
+            True si el registro fue exitoso, False en caso contrario
+        """
+        try:
+            if not self.is_connected:
+                self.connect()
+            
+            # Asegurar que tenemos los campos requeridos
+            movimiento_insert = {
+                'codigo_interno': movimiento_data.get('codigo_interno'),
+                'tipo_producto': movimiento_data.get('tipo_producto'),
+                'tipo_movimiento': movimiento_data.get('tipo_movimiento'),
+                'cantidad': int(movimiento_data.get('cantidad', 0)),
+                'stock_anterior': int(movimiento_data.get('stock_anterior', 0)),
+                'stock_nuevo': int(movimiento_data.get('stock_nuevo', 0))
+            }
+            
+            # Campos opcionales
+            if movimiento_data.get('motivo'):
+                movimiento_insert['motivo'] = movimiento_data['motivo']
+            
+            if movimiento_data.get('id_usuario'):
+                movimiento_insert['id_usuario'] = movimiento_data['id_usuario']
+            
+            if movimiento_data.get('id_venta'):
+                movimiento_insert['id_venta'] = movimiento_data['id_venta']
+            
+            response = self.client.table('movimientos_inventario').insert(movimiento_insert).execute()
+            
+            logging.info(f"✅ Movimiento registrado: {movimiento_data.get('tipo_movimiento')} de {movimiento_data.get('codigo_interno')}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error registrando movimiento de inventario: {e}")
+            return False
+    
+    def obtener_movimientos_completos(self, limite: int = 1000) -> List[Dict]:
+        """Obtener movimientos de inventario con nombres de productos y usuarios
+        
+        Args:
+            limite: Número máximo de movimientos a retornar (default 1000)
+        
+        Returns:
+            Lista de diccionarios con movimientos completos incluyendo:
+            - nombre_producto (del JOIN con ca_productos_varios o ca_suplementos)
+            - nombre_usuario (del JOIN con usuarios si existe id_usuario)
+        """
+        try:
+            if not self.is_connected:
+                self.connect()
+            
+            # Obtener movimientos básicos
+            response = self.client.table('movimientos_inventario').select(
+                'id_movimiento, fecha, tipo_movimiento, codigo_interno, tipo_producto, '
+                'cantidad, stock_anterior, stock_nuevo, motivo, id_usuario, id_venta'
+            ).order('fecha', desc=True).limit(limite).execute()
+            
+            movimientos = response.data or []
+            movimientos_completos = []
+            
+            # Para cada movimiento, obtener el nombre del producto
+            for mov in movimientos:
+                codigo_interno = mov.get('codigo_interno')
+                tipo_producto = mov.get('tipo_producto', 'varios')
+                id_usuario = mov.get('id_usuario')
+                
+                nombre_producto = 'Producto desconocido'
+                nombre_usuario = 'Usuario desconocido'
+                
+                # Obtener nombre del producto según tipo
+                try:
+                    if tipo_producto == 'varios':
+                        response_prod = self.client.table('ca_productos_varios').select('nombre').eq(
+                            'codigo_interno', codigo_interno
+                        ).execute()
+                        if response_prod.data:
+                            nombre_producto = response_prod.data[0].get('nombre', 'Producto desconocido')
+                    else:
+                        response_prod = self.client.table('ca_suplementos').select('nombre').eq(
+                            'codigo_interno', codigo_interno
+                        ).execute()
+                        if response_prod.data:
+                            nombre_producto = response_prod.data[0].get('nombre', 'Producto desconocido')
+                except Exception as e:
+                    logging.warning(f"No se pudo obtener nombre del producto {codigo_interno}: {e}")
+                
+                # Obtener nombre del usuario
+                try:
+                    if id_usuario:
+                        response_user = self.client.table('usuarios').select('nombre_completo').eq(
+                            'id_usuario', id_usuario
+                        ).execute()
+                        if response_user.data:
+                            nombre_usuario = response_user.data[0].get('nombre_completo', 'Usuario desconocido')
+                except Exception as e:
+                    logging.warning(f"No se pudo obtener nombre del usuario {id_usuario}: {e}")
+                
+                # Agregar movimiento completo
+                movimientos_completos.append({
+                    'id_movimiento': mov.get('id_movimiento'),
+                    'fecha': mov.get('fecha'),
+                    'tipo_movimiento': mov.get('tipo_movimiento'),
+                    'codigo_interno': mov.get('codigo_interno'),
+                    'tipo_producto': mov.get('tipo_producto'),
+                    'cantidad': mov.get('cantidad'),
+                    'stock_anterior': mov.get('stock_anterior'),
+                    'stock_nuevo': mov.get('stock_nuevo'),
+                    'motivo': mov.get('motivo') or '',
+                    'id_usuario': mov.get('id_usuario'),
+                    'id_venta': mov.get('id_venta'),
+                    'nombre_producto': nombre_producto,
+                    'nombre_usuario': nombre_usuario
+                })
+            
+            logging.info(f"✅ Obtuvieron {len(movimientos_completos)} movimientos completos")
+            return movimientos_completos
+            
+        except Exception as e:
+            logging.error(f"Error obteniendo movimientos completos: {e}")
+            return []
     
     # ========== UBICACIONES ==========
     

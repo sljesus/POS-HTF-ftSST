@@ -255,18 +255,23 @@ class MovimientoInventarioWindow(QWidget):
             return
         
         try:
-            # Buscar primero por código interno
-            producto = self.pg_manager.get_product_by_code(codigo)
+            # Buscar primero por código interno (con stock incluido)
+            producto = self.pg_manager.get_product_with_stock(codigo)
             
-            # Si no se encuentra, buscar por código de barras
+            # Si no se encuentra, intentar por código de barras
             if not producto:
-                producto = self.pg_manager.get_product_by_barcode(codigo)
+                # Buscar en tablas de productos primero
+                prod = self.pg_manager.get_product_by_barcode(codigo)
+                if prod:
+                    # Si lo encontró por código de barras, obtener también el stock
+                    codigo_interno = prod.get('codigo_interno')
+                    producto = self.pg_manager.get_product_with_stock(codigo_interno)
             
             if producto:
                 self.producto_seleccionado = producto
                 
                 # Mostrar información del producto
-                stock_actual = producto['stock_actual'] if producto['stock_actual'] else 0
+                stock_actual = producto.get('stock_actual', 0) if producto.get('stock_actual') else 0
                 info_text = (
                     f"✓ Producto encontrado\n"
                     f"Código: {producto['codigo_interno']}\n"
@@ -352,42 +357,59 @@ class MovimientoInventarioWindow(QWidget):
                 else:
                     tipo_movimiento_db = "merma"  # Por defecto para salidas
             
-            # Usar Supabase para obtener y actualizar datos
-            # Obtener stock actual antes del movimiento
-            inventario_data = self.supabase_service.get_inventario(
-                self.producto_seleccionado['codigo_interno']
-            )
-            stock_anterior = inventario_data['stock_actual'] if inventario_data else 0
+            # Obtener stock actual del producto seleccionado
+            stock_anterior = self.producto_seleccionado.get('stock_actual', 0)
             
+            # Calcular nuevo stock
             if self.tipo_movimiento == "entrada":
-                # Incrementar stock
                 nuevo_stock = stock_anterior + cantidad
-                self.supabase_service.update_inventario_stock(
-                    self.producto_seleccionado['codigo_interno'],
-                    nuevo_stock,
-                    fecha_entrada=datetime.now().isoformat()
-                )
+                fecha_entrada = datetime.now().isoformat()
+                fecha_salida = None
             else:
-                # Decrementar stock
                 nuevo_stock = stock_anterior - cantidad
-                self.supabase_service.update_inventario_stock(
-                    self.producto_seleccionado['codigo_interno'],
-                    nuevo_stock,
-                    fecha_salida=datetime.now().isoformat()
-                )
+                fecha_entrada = None
+                fecha_salida = datetime.now().isoformat()
             
-            # Registrar el movimiento en la tabla de movimientos
-            self.supabase_service.insert_movimiento_inventario({
+            # Actualizar stock en inventario
+            exito = self.pg_manager.actualizar_stock(
+                self.producto_seleccionado['codigo_interno'],
+                self.producto_seleccionado['tipo_producto'],
+                nuevo_stock,
+                fecha_entrada=fecha_entrada,
+                fecha_salida=fecha_salida
+            )
+            
+            if not exito:
+                show_error_dialog(
+                    self,
+                    "Error",
+                    "No se pudo actualizar el stock",
+                    detail="Hubo un error al actualizar el stock en el inventario"
+                )
+                return
+            
+            # Registrar el movimiento
+            movimiento_data = {
                 'codigo_interno': self.producto_seleccionado['codigo_interno'],
-                'tipo_producto': self.producto_seleccionado['tipo'],
-                'tipo_movimiento': tipo_movimiento_db,
+                'tipo_producto': self.producto_seleccionado['tipo_producto'],
+                'tipo_movimiento': 'entrada' if self.tipo_movimiento == "entrada" else tipo_movimiento_db,
                 'cantidad': cantidad if self.tipo_movimiento == "entrada" else -cantidad,
                 'stock_anterior': stock_anterior,
                 'stock_nuevo': nuevo_stock,
-                'motivo': motivo_texto,
-                'id_usuario': self.user_data.get('id_usuario'),
-                'fecha': datetime.now().isoformat()
-            })
+                'motivo': motivo_texto if self.tipo_movimiento != "entrada" else None,
+                'id_usuario': self.user_data.get('id_usuario') if self.user_data else None
+            }
+            
+            exito = self.pg_manager.registrar_movimiento_inventario(movimiento_data)
+            
+            if not exito:
+                show_error_dialog(
+                    self,
+                    "Error",
+                    "No se pudo registrar el movimiento",
+                    detail="El movimiento de inventario no se pudo registrar"
+                )
+                return
             
             show_success_dialog(
                 self,

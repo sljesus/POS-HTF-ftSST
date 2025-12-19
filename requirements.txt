@@ -6,3 +6,6 @@ supabase>=2.0.0  # Cliente para sincronización con Supabase
 psycopg2-binary>=2.9.0  # Driver PostgreSQL
 pyinstaller>=6.0.0  # Para generar ejecutable de Windows
 customtkinter>=5.2.2  # UI alternativa para formularios simples
+openpyxl>=3.11.0  # Leer y escribir archivos Excel (.xlsx)
+pandas>=2.0.0  # Manipulación de datos (opcional pero útil)
+xlsxwriter>=3.1.2  # Alternativa para crear Excel con formato avanzado

@@ -297,15 +297,11 @@ class InventarioWindow(QWidget):
         """Cargar datos de inventario desde la base de datos"""
         try:
             logging.info("Cargando inventario completo...")
-            response = self.pg_manager.client.table('inventario').select(
-                '*'
-            ).order('codigo_interno').execute()
-            
-            # Obtener datos de la respuesta de Supabase
-            self.productos_data = response.data
+            # Usar el método de postgres_manager en lugar de acceso directo
+            self.productos_data = self.pg_manager.obtener_inventario_completo()
             
             # Poblar combo de categorías
-            categorias = sorted(set(p['categoria'] for p in self.productos_data if p['categoria']))
+            categorias = sorted(set(p.get('categoria') for p in self.productos_data if p.get('categoria')))
             self.categoria_combo.clear()
             self.categoria_combo.addItem("Todas")
             self.categoria_combo.addItems(categorias)
@@ -342,8 +338,8 @@ class InventarioWindow(QWidget):
             # Nombre
             self.inventory_table.setItem(row, 1, QTableWidgetItem(producto['nombre']))
             
-            # Categoría
-            self.inventory_table.setItem(row, 2, QTableWidgetItem(producto['categoria']))
+            # Categoría (usar seccion si está disponible)
+            self.inventory_table.setItem(row, 2, QTableWidgetItem(producto.get('seccion', 'N/A')))
             
             # Precio
             precio = float(producto['precio']) if producto['precio'] is not None else 0.0
@@ -410,20 +406,20 @@ class InventarioWindow(QWidget):
                     texto_match = (
                         texto_busqueda in producto['codigo_interno'].lower()
                         or texto_busqueda in producto['nombre'].lower()
-                        or texto_busqueda in producto['categoria'].lower()
+                        or (producto.get('seccion') and texto_busqueda in producto['seccion'].lower())
                         or (producto.get('codigo_barras') and texto_busqueda in producto['codigo_barras'].lower())
                     )
                     if not texto_match:
                         continue
                 
-                # Filtro de categoría
+                # Filtro de categoría (usar seccion)
                 if categoria_seleccionada != "Todas":
-                    if producto['categoria'] != categoria_seleccionada:
+                    if producto.get('seccion') != categoria_seleccionada:
                         continue
                 
                 # Filtro de tipo de producto
                 if tipo_seleccionado == "Producto Varios":
-                    if producto['tipo_producto'] != 'producto_varios':
+                    if producto['tipo_producto'] != 'varios':
                         continue
                 elif tipo_seleccionado == "Suplemento":
                     if producto['tipo_producto'] != 'suplemento':
@@ -542,7 +538,7 @@ class InventarioWindow(QWidget):
             for row, producto in enumerate(self.productos_data, 2):
                 ws.cell(row=row, column=1, value=producto['codigo_interno']).border = border
                 ws.cell(row=row, column=2, value=producto['nombre']).border = border
-                ws.cell(row=row, column=3, value=producto['categoria']).border = border
+                ws.cell(row=row, column=3, value=producto.get('seccion', 'N/A')).border = border
                 
                 precio_cell = ws.cell(row=row, column=4, value=producto['precio'])
                 precio_cell.number_format = '$#,##0.00'

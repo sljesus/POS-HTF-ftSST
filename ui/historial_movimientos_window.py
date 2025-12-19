@@ -41,17 +41,8 @@ class MovimientosLoaderThread(QThread):
     def run(self):
         """Cargar movimientos desde la base de datos en un hilo separado"""
         try:
-            # Verificar que la conexión esté activa
-            if not self.pg_manager.is_connected:
-                self.pg_manager.connect()
-                
-            # Obtener movimientos desde Supabase
-            response = self.pg_manager.client.table('movimientos_inventario').select(
-                'id_movimiento, fecha, tipo_movimiento, codigo_interno, tipo_producto, cantidad, '
-                'stock_anterior, stock_nuevo, motivo, id_usuario, id_venta'
-            ).order('fecha', desc=True).limit(1000).execute()
-            
-            rows = response.data if response.data else []
+            # Usar el método de postgres_manager que retorna movimientos completos
+            rows = self.pg_manager.obtener_movimientos_completos(limite=1000)
             self.movimientos_loaded.emit(rows)
                 
         except Exception as e:
