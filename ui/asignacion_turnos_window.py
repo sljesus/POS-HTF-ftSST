@@ -5,7 +5,7 @@ Usando componentes reutilizables del sistema de diseño
 """
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, 
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QComboBox, QDateEdit, QLabel,
     QTimeEdit, QCheckBox, QSpinBox
@@ -20,7 +20,7 @@ import logging
 from ui.components import (
     WindowsPhoneTheme,
     TileButton,
-    create_page_layout,
+    SectionTitle,
     ContentPanel,
     StyledLabel,
     show_info_dialog,
@@ -50,90 +50,103 @@ class AsignacionTurnosWindow(QWidget):
     def setup_ui(self):
         """Configurar interfaz de asignación de turnos"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setContentsMargins(WindowsPhoneTheme.MARGIN_MEDIUM,
+                                 WindowsPhoneTheme.MARGIN_MEDIUM,
+                                 WindowsPhoneTheme.MARGIN_MEDIUM,
+                                 WindowsPhoneTheme.MARGIN_MEDIUM)
+        layout.setSpacing(WindowsPhoneTheme.MARGIN_SMALL)
         
-        # Contenido
-        content = QWidget()
-        content_layout = create_page_layout("ASIGNACIÓN DE TURNOS")
-        content.setLayout(content_layout)
+        # Título
+        title = SectionTitle("ASIGNACIÓN DE TURNOS")
+        layout.addWidget(title)
         
-        # Panel de asignación
+        # Layout horizontal para dos columnas
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
+        
+        # Columna izquierda: Panel de asignación
         asignacion_panel = self.create_asignacion_panel()
-        content_layout.addWidget(asignacion_panel)
+        content_layout.addWidget(asignacion_panel, stretch=1)
         
-        # Panel de turnos asignados
+        # Columna derecha: Panel de turnos asignados
         tabla_panel = self.create_tabla_panel()
-        content_layout.addWidget(tabla_panel)
+        content_layout.addWidget(tabla_panel, stretch=1)
         
-        # Panel de botones
+        layout.addLayout(content_layout)
+        
+        # Panel de botones al pie
         buttons_panel = self.create_buttons_panel()
-        content_layout.addWidget(buttons_panel)
-        
-        layout.addWidget(content)
+        layout.addLayout(buttons_panel)
     
     def create_asignacion_panel(self):
         """Crear panel de asignación de turnos"""
         panel = ContentPanel()
         panel_layout = QVBoxLayout(panel)
+        panel_layout.setSpacing(WindowsPhoneTheme.MARGIN_SMALL)
         
         # Título de sección
         title = StyledLabel("Crear Nuevo Turno", bold=True, size=WindowsPhoneTheme.FONT_SIZE_SUBTITLE)
         panel_layout.addWidget(title)
         
-        # Primera fila: Fecha y Empleado
-        row1 = QHBoxLayout()
-        row1.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
+        # Grid de campos
+        grid = QGridLayout()
+        grid.setSpacing(12)
+        grid.setColumnStretch(1, 1)
+        
+        # Estilo para inputs
+        input_style = f"""
+            QDateEdit, QComboBox, QTimeEdit, QSpinBox {{
+                padding: 8px;
+                border: 2px solid #e5e7eb;
+                border-radius: 4px;
+                font-family: {WindowsPhoneTheme.FONT_FAMILY};
+                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+                background-color: white;
+            }}
+            QDateEdit:focus, QComboBox:focus, QTimeEdit:focus, QSpinBox:focus {{
+                border-color: {WindowsPhoneTheme.TILE_BLUE};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 30px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #666;
+                margin-right: 10px;
+            }}
+        """
+        
+        row = 0
         
         # Fecha
-        fecha_container = QWidget()
-        fecha_layout = QVBoxLayout(fecha_container)
-        fecha_layout.setContentsMargins(0, 0, 0, 0)
-        fecha_layout.setSpacing(5)
-        
         label_fecha = StyledLabel("Fecha:", bold=True)
-        fecha_layout.addWidget(label_fecha)
+        grid.addWidget(label_fecha, row, 0)
         
         self.fecha_turno = QDateEdit()
         self.fecha_turno.setCalendarPopup(True)
         self.fecha_turno.setDate(QDate.currentDate())
-        self.fecha_turno.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
         self.fecha_turno.setMinimumHeight(40)
+        self.fecha_turno.setStyleSheet(input_style)
         self.fecha_turno.dateChanged.connect(self.actualizar_turnos_fecha)
-        fecha_layout.addWidget(self.fecha_turno)
-        
-        row1.addWidget(fecha_container, stretch=1)
+        grid.addWidget(self.fecha_turno, row, 1)
+        row += 1
         
         # Empleado
-        empleado_container = QWidget()
-        empleado_layout = QVBoxLayout(empleado_container)
-        empleado_layout.setContentsMargins(0, 0, 0, 0)
-        empleado_layout.setSpacing(5)
-        
         label_empleado = StyledLabel("Empleado:", bold=True)
-        empleado_layout.addWidget(label_empleado)
+        grid.addWidget(label_empleado, row, 0)
         
         self.empleado_combo = QComboBox()
-        self.empleado_combo.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.empleado_combo.setStyleSheet(input_style)
         self.empleado_combo.setMinimumHeight(40)
-        empleado_layout.addWidget(self.empleado_combo)
+        grid.addWidget(self.empleado_combo, row, 1)
+        row += 1
         
-        row1.addWidget(empleado_container, stretch=2)
-        
-        panel_layout.addLayout(row1)
-        
-        # Segunda fila: Turno predefinido o personalizado
-        row2 = QHBoxLayout()
-        row2.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
-        
-        # Turno predefinido
-        turno_container = QWidget()
-        turno_layout = QVBoxLayout(turno_container)
-        turno_layout.setContentsMargins(0, 0, 0, 0)
-        turno_layout.setSpacing(5)
-        
+        # Turno
         label_turno = StyledLabel("Turno:", bold=True)
-        turno_layout.addWidget(label_turno)
+        grid.addWidget(label_turno, row, 0)
         
         self.turno_combo = QComboBox()
         self.turno_combo.addItems([
@@ -141,74 +154,49 @@ class AsignacionTurnosWindow(QWidget):
             "Vespertino (14:00 - 22:00)",
             "Personalizado"
         ])
-        self.turno_combo.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.turno_combo.setStyleSheet(input_style)
         self.turno_combo.setMinimumHeight(40)
         self.turno_combo.currentIndexChanged.connect(self.toggle_horario_personalizado)
-        turno_layout.addWidget(self.turno_combo)
-        
-        row2.addWidget(turno_container, stretch=2)
-        
-        panel_layout.addLayout(row2)
-        
-        # Tercera fila: Horarios personalizados (ocultos por defecto)
-        row3 = QHBoxLayout()
-        row3.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
+        grid.addWidget(self.turno_combo, row, 1)
+        row += 1
         
         # Hora inicio
-        inicio_container = QWidget()
-        inicio_layout = QVBoxLayout(inicio_container)
-        inicio_layout.setContentsMargins(0, 0, 0, 0)
-        inicio_layout.setSpacing(5)
-        
         self.label_inicio = StyledLabel("Hora Inicio:", bold=True)
-        inicio_layout.addWidget(self.label_inicio)
+        grid.addWidget(self.label_inicio, row, 0)
         
         self.hora_inicio = QTimeEdit()
         self.hora_inicio.setTime(QTime(6, 0))
-        self.hora_inicio.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
         self.hora_inicio.setMinimumHeight(40)
         self.hora_inicio.setDisplayFormat("HH:mm")
-        inicio_layout.addWidget(self.hora_inicio)
-        
-        row3.addWidget(inicio_container, stretch=1)
+        self.hora_inicio.setStyleSheet(input_style)
+        grid.addWidget(self.hora_inicio, row, 1)
+        row += 1
         
         # Hora fin
-        fin_container = QWidget()
-        fin_layout = QVBoxLayout(fin_container)
-        fin_layout.setContentsMargins(0, 0, 0, 0)
-        fin_layout.setSpacing(5)
-        
         self.label_fin = StyledLabel("Hora Fin:", bold=True)
-        fin_layout.addWidget(self.label_fin)
+        grid.addWidget(self.label_fin, row, 0)
         
         self.hora_fin = QTimeEdit()
         self.hora_fin.setTime(QTime(14, 0))
-        self.hora_fin.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
         self.hora_fin.setMinimumHeight(40)
         self.hora_fin.setDisplayFormat("HH:mm")
-        fin_layout.addWidget(self.hora_fin)
-        
-        row3.addWidget(fin_container, stretch=1)
+        self.hora_fin.setStyleSheet(input_style)
+        grid.addWidget(self.hora_fin, row, 1)
+        row += 1
         
         # Monto inicial
-        monto_container = QWidget()
-        monto_layout = QVBoxLayout(monto_container)
-        monto_layout.setContentsMargins(0, 0, 0, 0)
-        monto_layout.setSpacing(5)
-        
         label_monto = StyledLabel("Monto Inicial $:", bold=True)
-        monto_layout.addWidget(label_monto)
+        grid.addWidget(label_monto, row, 0)
         
         self.monto_inicial = QSpinBox()
         self.monto_inicial.setRange(0, 100000)
         self.monto_inicial.setValue(0)
-        self.monto_inicial.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
         self.monto_inicial.setMinimumHeight(40)
-        monto_layout.addWidget(self.monto_inicial)
+        self.monto_inicial.setStyleSheet(input_style)
+        grid.addWidget(self.monto_inicial, row, 1)
+        row += 1
         
-        row3.addWidget(monto_container, stretch=1)
-        
-        panel_layout.addLayout(row3)
+        panel_layout.addLayout(grid)
         
         # Ocultar horarios personalizados por defecto
         self.label_inicio.hide()
@@ -216,21 +204,11 @@ class AsignacionTurnosWindow(QWidget):
         self.label_fin.hide()
         self.hora_fin.hide()
         
+        panel_layout.addStretch()
+        
         # Botón crear turno
-        btn_crear = QPushButton("Crear y Asignar Turno")
-        btn_crear.setMinimumHeight(50)
-        btn_crear.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
-        btn_crear.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {WindowsPhoneTheme.TILE_GREEN};
-                color: white;
-                border: none;
-                border-radius: 4px;
-            }}
-            QPushButton:hover {{
-                background-color: #008a00;
-            }}
-        """)
+        btn_crear = TileButton("Crear Turno", "fa5s.calendar-plus", WindowsPhoneTheme.TILE_GREEN)
+        btn_crear.setMaximumHeight(120)
         btn_crear.clicked.connect(self.crear_turno)
         panel_layout.addWidget(btn_crear)
         
@@ -255,8 +233,23 @@ class AsignacionTurnosWindow(QWidget):
         self.fecha_filtro = QDateEdit()
         self.fecha_filtro.setCalendarPopup(True)
         self.fecha_filtro.setDate(QDate.currentDate())
-        self.fecha_filtro.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
-        self.fecha_filtro.setMinimumHeight(35)
+        self.fecha_filtro.setMinimumHeight(40)
+        
+        # Estilo consistente
+        date_style = f"""
+            QDateEdit {{
+                padding: 8px;
+                border: 2px solid #e5e7eb;
+                border-radius: 4px;
+                font-family: {WindowsPhoneTheme.FONT_FAMILY};
+                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+                background-color: white;
+            }}
+            QDateEdit:focus {{
+                border-color: {WindowsPhoneTheme.TILE_BLUE};
+            }}
+        """
+        self.fecha_filtro.setStyleSheet(date_style)
         self.fecha_filtro.dateChanged.connect(self.cargar_turnos_asignados)
         filter_layout.addWidget(self.fecha_filtro)
         
@@ -273,7 +266,6 @@ class AsignacionTurnosWindow(QWidget):
         ])
         
         # Configurar tabla
-        self.tabla_turnos.setAlternatingRowColors(True)
         self.tabla_turnos.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla_turnos.setSelectionMode(QTableWidget.SingleSelection)
         self.tabla_turnos.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -289,9 +281,33 @@ class AsignacionTurnosWindow(QWidget):
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Estado
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # Acciones
         
-        # Estilo
-        font = QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL)
-        self.tabla_turnos.setFont(font)
+        # Aplicar estilos a la tabla (consistente con personal_window)
+        self.tabla_turnos.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: white;
+                border: none;
+                gridline-color: #e5e7eb;
+                font-family: {WindowsPhoneTheme.FONT_FAMILY};
+                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+            }}
+            QTableWidget::item {{
+                padding: 8px;
+                border-bottom: 1px solid #e5e7eb;
+            }}
+            QTableWidget::item:selected {{
+                background-color: {WindowsPhoneTheme.TILE_BLUE};
+                color: white;
+            }}
+            QHeaderView::section {{
+                background-color: {WindowsPhoneTheme.PRIMARY_BLUE};
+                color: white;
+                padding: 8px;
+                border: none;
+                font-weight: bold;
+                font-family: {WindowsPhoneTheme.FONT_FAMILY};
+                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+            }}
+        """)
         
         panel_layout.addWidget(self.tabla_turnos)
         
@@ -299,31 +315,24 @@ class AsignacionTurnosWindow(QWidget):
     
     def create_buttons_panel(self):
         """Crear panel de botones"""
-        panel = QWidget()
-        panel_layout = QHBoxLayout(panel)
-        panel_layout.setContentsMargins(WindowsPhoneTheme.MARGIN_MEDIUM,
-                                       WindowsPhoneTheme.MARGIN_SMALL,
-                                       WindowsPhoneTheme.MARGIN_MEDIUM,
-                                       WindowsPhoneTheme.MARGIN_MEDIUM)
-        panel_layout.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
+        panel_layout = QHBoxLayout()
+        panel_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
         
         panel_layout.addStretch()
         
         # Botón actualizar
-        btn_actualizar = QPushButton("Actualizar")
-        btn_actualizar.setMinimumSize(150, 45)
-        btn_actualizar.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
+        btn_actualizar = TileButton("Actualizar", "fa5s.sync", WindowsPhoneTheme.TILE_BLUE)
+        btn_actualizar.setMaximumHeight(120)
         btn_actualizar.clicked.connect(self.cargar_turnos_asignados)
         panel_layout.addWidget(btn_actualizar)
         
         # Botón volver
-        btn_volver = QPushButton("Volver")
-        btn_volver.setMinimumSize(150, 45)
-        btn_volver.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
+        btn_volver = TileButton("Volver", "fa5s.arrow-left", WindowsPhoneTheme.TILE_RED)
+        btn_volver.setMaximumHeight(120)
         btn_volver.clicked.connect(self.cerrar_solicitado.emit)
         panel_layout.addWidget(btn_volver)
         
-        return panel
+        return panel_layout
     
     def toggle_horario_personalizado(self):
         """Mostrar/ocultar campos de horario personalizado"""
@@ -346,22 +355,16 @@ class AsignacionTurnosWindow(QWidget):
     def cargar_empleados(self):
         """Cargar lista de empleados activos"""
         try:
-            with self.pg_manager.connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT id_usuario, nombre_completo, nombre_usuario
-                    FROM usuarios
-                    WHERE activo = TRUE
-                    ORDER BY nombre_completo
-                """)
-                
-                self.empleados = cursor.fetchall()
-                
-                self.empleado_combo.clear()
-                for empleado in self.empleados:
-                    self.empleado_combo.addItem(
-                        f"{empleado['nombre_completo']} (@{empleado['nombre_usuario']})",
-                        empleado['id_usuario']
-                    )
+            # Obtener empleados activos
+            response = self.pg_manager.client.table('usuarios').select('id_usuario, nombre_completo, nombre_usuario').eq('activo', True).order('nombre_completo').execute()
+            self.empleados = response.data if response.data else []
+            
+            self.empleado_combo.clear()
+            for empleado in self.empleados:
+                self.empleado_combo.addItem(
+                    f"{empleado['nombre_completo']} (@{empleado['nombre_usuario']})",
+                    empleado['id_usuario']
+                )
                 
         except Exception as e:
             logging.error(f"Error cargando empleados: {e}")
@@ -372,23 +375,21 @@ class AsignacionTurnosWindow(QWidget):
         try:
             fecha_desde = self.fecha_filtro.date().toPython()
             
-            with self.pg_manager.connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT 
-                        t.id_turno,
-                        t.id_usuario,
-                        u.nombre_completo,
-                        t.fecha_apertura,
-                        t.monto_inicial,
-                        t.cerrado,
-                        t.fecha_cierre
-                    FROM turnos_caja t
-                    JOIN usuarios u ON t.id_usuario = u.id_usuario
-                    WHERE DATE(t.fecha_apertura) >= %s
-                    ORDER BY t.fecha_apertura DESC
-                """, (fecha_desde,))
+            # Obtener turnos desde la fecha
+            response = self.pg_manager.client.table('turnos_caja').select('id_turno, id_usuario, fecha_apertura, monto_inicial, cerrado, fecha_cierre').gte('fecha_apertura', str(fecha_desde)).order('fecha_apertura', desc=True).execute()
+            
+            turnos_raw = response.data if response.data else []
+            self.turnos_asignados = []
+            
+            for turno in turnos_raw:
+                # Obtener datos del usuario
+                response_usuario = self.pg_manager.client.table('usuarios').select('nombre_completo').eq('id_usuario', turno['id_usuario']).single().execute()
+                usuario = response_usuario.data if response_usuario.data else {}
                 
-                self.turnos_asignados = cursor.fetchall()
+                # Construir registro completo
+                turno_completo = turno.copy()
+                turno_completo['nombre_completo'] = usuario.get('nombre_completo', 'Desconocido')
+                self.turnos_asignados.append(turno_completo)
                 self.actualizar_tabla()
                 
         except Exception as e:
@@ -479,64 +480,48 @@ class AsignacionTurnosWindow(QWidget):
             fecha_apertura = datetime.combine(fecha_turno, hora_inicio)
             
             # Verificar si ya existe un turno para ese usuario en esa fecha
-            with self.pg_manager.connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT COUNT(*) as cantidad
-                    FROM turnos_caja
-                    WHERE id_usuario = %s 
-                    AND DATE(fecha_apertura) = %s
-                    AND cerrado = FALSE
-                """, (id_usuario, fecha_turno))
-                
-                resultado = cursor.fetchone()
-                if resultado['cantidad'] > 0:
-                    show_warning_dialog(
-                        self, 
-                        "Advertencia", 
-                        "Ya existe un turno abierto para este empleado en esta fecha"
-                    )
-                    return
-                
-                # Confirmar creación
-                turno_nombre = self.turno_combo.currentText()
-                empleado_nombre = self.empleado_combo.currentText()
-                
-                if not show_confirmation_dialog(
-                    self,
-                    "Confirmar Turno",
-                    f"¿Crear turno para {empleado_nombre}?",
-                    detail=f"Fecha: {fecha_turno.strftime('%d/%m/%Y')}\n"
-                           f"Turno: {turno_nombre}\n"
-                           f"Horario: {hora_inicio.strftime('%H:%M')} - {hora_fin.strftime('%H:%M')}\n"
-                           f"Monto inicial: ${monto_inicial:.2f}"
-                ):
-                    return
-                
-                # Insertar turno
-                cursor.execute("""
-                    INSERT INTO turnos_caja (
-                        id_usuario,
-                        fecha_apertura,
-                        monto_inicial,
-                        notas_apertura,
-                        cerrado
-                    ) VALUES (%s, %s, %s, %s, FALSE)
-                """, (
-                    id_usuario,
-                    fecha_apertura,
-                    monto_inicial,
-                    f"Turno {turno_nombre}"
-                ))
-                
-                self.pg_manager.connection.commit()
-                
-                show_success_dialog(self, "Éxito", "Turno creado y asignado correctamente")
-                
-                # Recargar turnos
-                self.cargar_turnos_asignados()
+            response = self.pg_manager.client.table('turnos_caja').select('id_turno').eq('id_usuario', id_usuario).eq('cerrado', False).execute()
+            turnos_mismo_dia = [t for t in (response.data or []) if t.get('fecha_apertura', '').startswith(str(fecha_turno))]
+            
+            if len(turnos_mismo_dia) > 0:
+                show_warning_dialog(
+                    self, 
+                    "Advertencia", 
+                    "Ya existe un turno abierto para este empleado en esta fecha"
+                )
+                return
+            
+            # Confirmar creación
+            turno_nombre = self.turno_combo.currentText()
+            empleado_nombre = self.empleado_combo.currentText()
+            
+            if not show_confirmation_dialog(
+                self,
+                "Confirmar Turno",
+                f"¿Crear turno para {empleado_nombre}?",
+                detail=f"Fecha: {fecha_turno.strftime('%d/%m/%Y')}\n"
+                       f"Turno: {turno_nombre}\n"
+                       f"Horario: {hora_inicio.strftime('%H:%M')} - {hora_fin.strftime('%H:%M')}\n"
+                       f"Monto inicial: ${monto_inicial:.2f}"
+            ):
+                return
+            
+            # Insertar turno
+            turno_data = {
+                'id_usuario': id_usuario,
+                'fecha_apertura': str(fecha_apertura),
+                'monto_inicial': monto_inicial,
+                'notas_apertura': f"Turno {turno_nombre}",
+                'cerrado': False
+            }
+            self.pg_manager.client.table('turnos_caja').insert(turno_data).execute()
+            
+            show_success_dialog(self, "Éxito", "Turno creado y asignado correctamente")
+            
+            # Recargar turnos
+            self.cargar_turnos_asignados()
                 
         except Exception as e:
-            self.pg_manager.connection.rollback()
             logging.error(f"Error creando turno: {e}")
             show_error_dialog(self, "Error", f"No se pudo crear el turno: {e}")
     
@@ -550,30 +535,22 @@ class AsignacionTurnosWindow(QWidget):
             ):
                 return
             
-            with self.pg_manager.connection.cursor() as cursor:
-                # Verificar que el turno no esté cerrado
-                cursor.execute("""
-                    SELECT cerrado FROM turnos_caja WHERE id_turno = %s
-                """, (id_turno,))
-                
-                turno = cursor.fetchone()
-                if turno and turno['cerrado']:
-                    show_warning_dialog(self, "Advertencia", "No se puede eliminar un turno cerrado")
-                    return
-                
-                # Eliminar turno
-                cursor.execute("""
-                    DELETE FROM turnos_caja WHERE id_turno = %s
-                """, (id_turno,))
-                
-                self.pg_manager.connection.commit()
-                
-                show_success_dialog(self, "Éxito", "Turno eliminado correctamente")
-                
-                # Recargar tabla
-                self.cargar_turnos_asignados()
+            # Verificar que el turno no esté cerrado
+            response = self.pg_manager.client.table('turnos_caja').select('cerrado').eq('id_turno', id_turno).single().execute()
+            turno = response.data if response.data else None
+            
+            if turno and turno.get('cerrado'):
+                show_warning_dialog(self, "Advertencia", "No se puede eliminar un turno cerrado")
+                return
+            
+            # Eliminar turno
+            self.pg_manager.client.table('turnos_caja').delete().eq('id_turno', id_turno).execute()
+            
+            show_success_dialog(self, "Éxito", "Turno eliminado correctamente")
+            
+            # Recargar tabla
+            self.cargar_turnos_asignados()
                 
         except Exception as e:
-            self.pg_manager.connection.rollback()
             logging.error(f"Error eliminando turno: {e}")
             show_error_dialog(self, "Error", f"No se pudo eliminar el turno: {e}")

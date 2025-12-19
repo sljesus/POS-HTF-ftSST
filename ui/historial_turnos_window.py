@@ -19,7 +19,7 @@ import logging
 from ui.components import (
     WindowsPhoneTheme,
     TileButton,
-    create_page_layout,
+    SectionTitle,
     ContentPanel,
     StyledLabel,
     SearchBar,
@@ -48,27 +48,27 @@ class HistorialTurnosWindow(QWidget):
     def setup_ui(self):
         """Configurar interfaz del historial"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setContentsMargins(WindowsPhoneTheme.MARGIN_MEDIUM,
+                                 WindowsPhoneTheme.MARGIN_MEDIUM,
+                                 WindowsPhoneTheme.MARGIN_MEDIUM,
+                                 WindowsPhoneTheme.MARGIN_MEDIUM)
+        layout.setSpacing(WindowsPhoneTheme.MARGIN_SMALL)
         
-        # Contenido
-        content = QWidget()
-        content_layout = create_page_layout("HISTORIAL DE TURNOS")
-        content.setLayout(content_layout)
+        # Título
+        title = SectionTitle("HISTORIAL DE TURNOS")
+        layout.addWidget(title)
         
         # Panel de filtros
         filters_panel = self.create_filters_panel()
-        content_layout.addWidget(filters_panel)
+        layout.addWidget(filters_panel)
         
         # Panel para la tabla
         table_panel = self.create_table_panel()
-        content_layout.addWidget(table_panel)
+        layout.addWidget(table_panel)
         
         # Panel de información y botones
         info_buttons_panel = self.create_info_buttons_panel()
-        content_layout.addWidget(info_buttons_panel)
-        
-        layout.addWidget(content)
+        layout.addLayout(info_buttons_panel)
     
     def create_filters_panel(self):
         """Crear el panel de filtros"""
@@ -108,8 +108,34 @@ class HistorialTurnosWindow(QWidget):
         
         self.estado_combo = QComboBox()
         self.estado_combo.addItems(["Todos", "Abiertos", "Cerrados"])
-        self.estado_combo.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
-        self.estado_combo.setMinimumHeight(35)
+        
+        # Estilo consistente con personal_window
+        input_style = f"""
+            QComboBox {{
+                padding: 8px;
+                border: 2px solid #e5e7eb;
+                border-radius: 4px;
+                font-family: {WindowsPhoneTheme.FONT_FAMILY};
+                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+                background-color: white;
+            }}
+            QComboBox:focus {{
+                border-color: {WindowsPhoneTheme.TILE_BLUE};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 30px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #666;
+                margin-right: 10px;
+            }}
+        """
+        self.estado_combo.setStyleSheet(input_style)
+        self.estado_combo.setMinimumHeight(40)
         self.estado_combo.currentIndexChanged.connect(self.aplicar_filtros)
         container_layout.addWidget(self.estado_combo)
         
@@ -119,6 +145,21 @@ class HistorialTurnosWindow(QWidget):
         """Crear filtros de rango de fechas"""
         fecha_layout = QHBoxLayout()
         fecha_layout.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
+        
+        # Estilo para inputs de fecha
+        input_style = f"""
+            QDateEdit {{
+                padding: 8px;
+                border: 2px solid #e5e7eb;
+                border-radius: 4px;
+                font-family: {WindowsPhoneTheme.FONT_FAMILY};
+                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+                background-color: white;
+            }}
+            QDateEdit:focus {{
+                border-color: {WindowsPhoneTheme.TILE_BLUE};
+            }}
+        """
         
         # Fecha inicio
         fecha_inicio_container = QWidget()
@@ -132,8 +173,8 @@ class HistorialTurnosWindow(QWidget):
         self.fecha_inicio = QDateEdit()
         self.fecha_inicio.setCalendarPopup(True)
         self.fecha_inicio.setDate(QDate.currentDate().addDays(-30))
-        self.fecha_inicio.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
-        self.fecha_inicio.setMinimumHeight(35)
+        self.fecha_inicio.setMinimumHeight(40)
+        self.fecha_inicio.setStyleSheet(input_style)
         self.fecha_inicio.dateChanged.connect(self.aplicar_filtros)
         fecha_inicio_layout.addWidget(self.fecha_inicio)
         
@@ -151,17 +192,16 @@ class HistorialTurnosWindow(QWidget):
         self.fecha_fin = QDateEdit()
         self.fecha_fin.setCalendarPopup(True)
         self.fecha_fin.setDate(QDate.currentDate())
-        self.fecha_fin.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
-        self.fecha_fin.setMinimumHeight(35)
+        self.fecha_fin.setMinimumHeight(40)
+        self.fecha_fin.setStyleSheet(input_style)
         self.fecha_fin.dateChanged.connect(self.aplicar_filtros)
         fecha_fin_layout.addWidget(self.fecha_fin)
         
         fecha_layout.addWidget(fecha_fin_container, stretch=1)
         
         # Botón limpiar filtros
-        btn_limpiar = QPushButton("Limpiar Filtros")
-        btn_limpiar.setMinimumHeight(45)
-        btn_limpiar.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        btn_limpiar = TileButton("Limpiar", "fa5s.eraser", WindowsPhoneTheme.TILE_ORANGE)
+        btn_limpiar.setMaximumHeight(90)
         btn_limpiar.clicked.connect(self.limpiar_filtros)
         fecha_layout.addWidget(btn_limpiar, stretch=1)
         
@@ -181,7 +221,6 @@ class HistorialTurnosWindow(QWidget):
         ])
         
         # Configurar tabla
-        self.tabla_turnos.setAlternatingRowColors(True)
         self.tabla_turnos.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla_turnos.setSelectionMode(QTableWidget.SingleSelection)
         self.tabla_turnos.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -200,9 +239,33 @@ class HistorialTurnosWindow(QWidget):
         header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # Diferencia
         header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # Estado
         
-        # Estilo de fuente
-        font = QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL)
-        self.tabla_turnos.setFont(font)
+        # Aplicar estilos a la tabla (consistente con personal_window)
+        self.tabla_turnos.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: white;
+                border: none;
+                gridline-color: #e5e7eb;
+                font-family: {WindowsPhoneTheme.FONT_FAMILY};
+                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+            }}
+            QTableWidget::item {{
+                padding: 8px;
+                border-bottom: 1px solid #e5e7eb;
+            }}
+            QTableWidget::item:selected {{
+                background-color: {WindowsPhoneTheme.TILE_BLUE};
+                color: white;
+            }}
+            QHeaderView::section {{
+                background-color: {WindowsPhoneTheme.PRIMARY_BLUE};
+                color: white;
+                padding: 8px;
+                border: none;
+                font-weight: bold;
+                font-family: {WindowsPhoneTheme.FONT_FAMILY};
+                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
+            }}
+        """)
         
         # Conectar doble clic para ver detalles
         self.tabla_turnos.itemDoubleClicked.connect(self.mostrar_detalles_turno)
@@ -213,13 +276,8 @@ class HistorialTurnosWindow(QWidget):
     
     def create_info_buttons_panel(self):
         """Crear panel de información y botones"""
-        panel = QWidget()
-        panel_layout = QHBoxLayout(panel)
-        panel_layout.setContentsMargins(WindowsPhoneTheme.MARGIN_MEDIUM, 
-                                       WindowsPhoneTheme.MARGIN_SMALL,
-                                       WindowsPhoneTheme.MARGIN_MEDIUM, 
-                                       WindowsPhoneTheme.MARGIN_MEDIUM)
-        panel_layout.setSpacing(WindowsPhoneTheme.MARGIN_MEDIUM)
+        panel_layout = QHBoxLayout()
+        panel_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
         
         # Label de total de registros
         self.label_total = StyledLabel("Total de turnos: 0", bold=True)
@@ -228,46 +286,28 @@ class HistorialTurnosWindow(QWidget):
         panel_layout.addStretch()
         
         # Botón refrescar
-        btn_refrescar = QPushButton("Actualizar")
-        btn_refrescar.setMinimumSize(150, 45)
-        btn_refrescar.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
+        btn_refrescar = TileButton("Actualizar", "fa5s.sync", WindowsPhoneTheme.TILE_BLUE)
+        btn_refrescar.setMaximumHeight(120)
         btn_refrescar.clicked.connect(self.cargar_turnos)
         panel_layout.addWidget(btn_refrescar)
         
         # Botón volver
-        btn_volver = QPushButton("Volver")
-        btn_volver.setMinimumSize(150, 45)
-        btn_volver.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
+        btn_volver = TileButton("Volver", "fa5s.arrow-left", WindowsPhoneTheme.TILE_RED)
+        btn_volver.setMaximumHeight(120)
         btn_volver.clicked.connect(self.cerrar_solicitado.emit)
         panel_layout.addWidget(btn_volver)
         
-        return panel
+        return panel_layout
     
     def cargar_turnos(self):
         """Cargar turnos desde la base de datos"""
         try:
-            with self.pg_manager.connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT 
-                        t.id_turno,
-                        t.id_usuario,
-                        u.nombre_usuario,
-                        t.fecha_apertura,
-                        t.fecha_cierre,
-                        t.monto_inicial,
-                        t.total_ventas_efectivo,
-                        t.monto_esperado,
-                        t.monto_real_cierre,
-                        t.diferencia,
-                        t.cerrado,
-                        t.notas_apertura
-                    FROM turnos_caja t
-                    JOIN usuarios u ON t.id_usuario = u.id_usuario
-                    ORDER BY t.fecha_apertura DESC
-                """)
-                
-                self.turnos_data = cursor.fetchall()
-                self.aplicar_filtros()
+            response = self.pg_manager.client.table('turnos_caja').select(
+                '*'
+            ).order('fecha_apertura', desc=True).execute()
+            
+            self.turnos_data = response.data
+            self.aplicar_filtros()
                 
         except Exception as e:
             logging.error(f"Error cargando turnos: {e}")
