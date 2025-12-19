@@ -1011,3 +1011,36 @@
 2025-11-19 13:08:44,872 - INFO - Monitor de entradas detenido
 2025-11-19 13:08:44,872 - INFO - Monitor de entradas detenido
 2025-11-19 13:08:45,032 - INFO - Conexión a base de datos cerrada
+2025-12-19 13:06:02,025 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-12-19 13:06:02,189 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-12-19 13:06:03,076 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-12-19 13:06:03,077 - INFO - Conexión a Supabase establecida
+2025-12-19 13:06:13,312 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=%2A&nombre_usuario=eq.admin&activo=eq.True "HTTP/2 200 OK"
+2025-12-19 13:06:13,715 - INFO - HTTP Request: PATCH https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-19 13:06:13,715 - INFO - Login exitoso: admin (Rol: administrador)
+2025-12-19 13:06:13,715 - INFO - Usuario autenticado: admin
+2025-12-19 13:06:14,083 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/miembros?select=id_miembro&activo=eq.True "HTTP/2 200 OK"
+2025-12-19 13:06:14,249 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/registro_entradas?select=id_miembro&tipo_acceso=eq.miembro&fecha_entrada=gte.2025-12-19T00%3A00%3A00&fecha_entrada=lte.2025-12-19T23%3A59%3A59 "HTTP/2 200 OK"
+2025-12-19 13:06:14,365 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/lockers?select=id_locker&activo=eq.True "HTTP/2 200 OK"
+2025-12-19 13:06:14,497 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/asignaciones_activas?select=id_locker&activa=eq.True&cancelada=eq.False&id_locker=not.is.null "HTTP/2 200 OK"
+2025-12-19 13:06:14,516 - INFO - Monitor de entradas inicializado (PostgreSQL LISTEN/NOTIFY en localhost:5432)
+2025-12-19 13:06:14,516 - INFO - [OK] Monitor de entradas iniciado (PostgreSQL LISTEN en localhost:5432)
+2025-12-19 13:06:14,516 - INFO - Monitor de entradas iniciado correctamente
+2025-12-19 13:06:14,665 - INFO - [OK] Escuchando canal PostgreSQL: nueva_entrada_canal
+2025-12-19 13:06:21,264 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/notificaciones_pos?select=%2A%2Cmiembros%28nombres%2Capellido_paterno%2Capellido_materno%2Ctelefono%29&codigo_pago_generado=eq.CASH-8&respondida=eq.False "HTTP/2 200 OK"
+2025-12-19 13:06:21,355 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/notificaciones_pos?select=%2A%2Cmiembros%28nombres%2Capellido_paterno%2Capellido_materno%2Ctelefono%29&codigo_pago_generado=eq.CASH-8 "HTTP/2 200 OK"
+2025-12-19 13:06:24,447 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/miembros?select=%2A&id_miembro=eq.2 "HTTP/2 200 OK"
+2025-12-19 13:06:36,336 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/notificaciones_pos?select=%2A&id_notificacion=eq.8 "HTTP/2 200 OK"
+2025-12-19 13:06:36,337 - INFO - [PAGO] Llamando Edge Function para notificación 8
+2025-12-19 13:06:36,988 - INFO - HTTP Request: POST https://ufnmqxyvrfionysjeiko.supabase.co/functions/v1/confirm-cash-payment "HTTP/2 400 Bad Request"
+2025-12-19 13:06:36,989 - ERROR - Error llamando Edge Function confirm-cash-payment: id_venta_digital es requerido
+2025-12-19 13:06:36,989 - WARNING - Edge Function falló: Error: id_venta_digital es requerido, usando fallback...
+2025-12-19 13:06:36,989 - INFO - [PAGO] Intentando fallback con método local para 8
+2025-12-19 13:06:37,139 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/notificaciones_pos?select=%2A%2Cventas_digitales%28%2A%29&id_notificacion=eq.8 "HTTP/2 200 OK"
+2025-12-19 13:06:37,240 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ventas_digitales?select=%2A&id_venta_digital=eq.5 "HTTP/2 200 OK"
+2025-12-19 13:06:37,357 - INFO - HTTP Request: PATCH https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ventas_digitales?id_venta_digital=eq.5 "HTTP/2 200 OK"
+2025-12-19 13:06:37,454 - INFO - HTTP Request: PATCH https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/notificaciones_pos?id_notificacion=eq.8 "HTTP/2 200 OK"
+2025-12-19 13:06:37,556 - INFO - HTTP Request: POST https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/asignaciones_activas "HTTP/2 201 Created"
+2025-12-19 13:06:37,672 - INFO - HTTP Request: POST https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/registro_entradas "HTTP/2 201 Created"
+2025-12-19 13:06:37,789 - INFO - HTTP Request: POST https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/notificaciones_pos "HTTP/2 201 Created"
+2025-12-19 13:06:37,790 - INFO - [DEBUG] Notificación procesada: {'id_miembro': 2, 'id_notificacion': 8, 'monto': 80.0, 'tipo': 'pago_efectivo'}
