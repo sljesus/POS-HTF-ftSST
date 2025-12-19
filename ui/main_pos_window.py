@@ -786,6 +786,7 @@ class MainPOSWindow(QMainWindow):
             logging.info(f"[DEBUG] Código original: {codigo_original} → Normalizado: {codigo_normalizado}")
             
             notif = None
+            ya_procesada = False
             
             # Buscar en Supabase
             if self.supabase_service:
@@ -812,11 +813,40 @@ class MainPOSWindow(QMainWindow):
                         'apellido_materno': miembro.get('apellido_materno', '')
                     }
                     logging.info(f"[DEBUG] ✓ Notificación encontrada: {notif['id_notificacion']}")
+                else:
+                    # Si no encuentra pendiente, buscar TODAS (incluyendo respondidas)
+                    logging.info(f"[DEBUG] No encontrada como pendiente, buscando todas...")
+                    response = self.supabase_service.client.table('notificaciones_pos') \
+                        .select('*, miembros(nombres, apellido_paterno, apellido_materno, telefono)') \
+                        .eq('codigo_pago_generado', codigo_normalizado) \
+                        .execute()
+                    
+                    if response.data and len(response.data) > 0:
+                        item = response.data[0]
+                        miembro = item.get('miembros') or {}
+                        
+                        notif = {
+                            'id_notificacion': item['id_notificacion'],
+                            'id_miembro': item['id_miembro'],
+                            'tipo_notificacion': item['tipo_notificacion'],
+                            'asunto': item['asunto'],
+                            'monto_pendiente': item.get('monto_pendiente'),
+                            'codigo_pago_generado': item.get('codigo_pago_generado'),
+                            'nombres': miembro.get('nombres', ''),
+                            'apellido_paterno': miembro.get('apellido_paterno', ''),
+                            'apellido_materno': miembro.get('apellido_materno', '')
+                        }
+                        
+                        if item.get('respondida'):
+                            ya_procesada = True
+                            logging.info(f"[DEBUG] ⚠️ Código ya procesado: {notif['id_notificacion']}")
+                        else:
+                            logging.info(f"[DEBUG] ✓ Notificación encontrada: {notif['id_notificacion']}")
             else:
                 # Fallback a PostgreSQL
                 logging.info(f"[DEBUG] Buscando en PostgreSQL...")
                 result = self.pg_manager.client.table('notificaciones_pos').select(
-                    'id_notificacion,id_miembro,tipo_notificacion,asunto,monto_pendiente,codigo_pago_generado,miembros(nombres,apellido_paterno,apellido_materno)'
+                    'id_notificacion,id_miembro,tipo_notificacion,asunto,monto_pendiente,codigo_pago_generado,respondida,miembros(nombres,apellido_paterno,apellido_materno)'
                 ).eq('codigo_pago_generado', codigo_normalizado).eq('respondida', False).execute()
                 
                 if result.data:
@@ -834,8 +864,45 @@ class MainPOSWindow(QMainWindow):
                         'apellido_materno': miembro.get('apellido_materno', '')
                     }
                     logging.info(f"[DEBUG] ✓ Notificación encontrada: {notif['id_notificacion']}")
+                else:
+                    # Si no encuentra pendiente en PostgreSQL, buscar todas
+                    logging.info(f"[DEBUG] No encontrada como pendiente en PostgreSQL, buscando todas...")
+                    result = self.pg_manager.client.table('notificaciones_pos').select(
+                        'id_notificacion,id_miembro,tipo_notificacion,asunto,monto_pendiente,codigo_pago_generado,respondida,miembros(nombres,apellido_paterno,apellido_materno)'
+                    ).eq('codigo_pago_generado', codigo_normalizado).execute()
+                    
+                    if result.data:
+                        datos = result.data[0]
+                        miembro = datos.get('miembros') or {}
+                        notif = {
+                            'id_notificacion': datos['id_notificacion'],
+                            'id_miembro': datos['id_miembro'],
+                            'tipo_notificacion': datos['tipo_notificacion'],
+                            'asunto': datos['asunto'],
+                            'monto_pendiente': datos.get('monto_pendiente'),
+                            'codigo_pago_generado': datos['codigo_pago_generado'],
+                            'nombres': miembro.get('nombres', ''),
+                            'apellido_paterno': miembro.get('apellido_paterno', ''),
+                            'apellido_materno': miembro.get('apellido_materno', '')
+                        }
+                        
+                        if datos.get('respondida'):
+                            ya_procesada = True
+                            logging.info(f"[DEBUG] ⚠️ Código ya procesado: {notif['id_notificacion']}")
+                        else:
+                            logging.info(f"[DEBUG] ✓ Notificación encontrada: {notif['id_notificacion']}")
             
             if notif:
+                # Si ya fue procesada, mostrar advertencia
+                if ya_procesada:
+                    show_warning_dialog(
+                        self,
+                        "Código ya procesado",
+                        f"Este código (CASH-{notif['id_notificacion']}) ya fue procesado.\n"
+                        f"Miembro: {notif['nombres']} {notif['apellido_paterno']}\n"
+                        f"Monto: ${notif.get('monto_pendiente', 0)}"
+                    )
+                
                 logging.info(f"[DEBUG] Abriendo modal de detalles de notificación...")
                 # Cerrar el diálogo de debug primero
                 dialog.accept()

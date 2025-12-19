@@ -160,9 +160,11 @@ class EscanearCodigoDialogo(QDialog):
                 logging.info(f"[ESCÁNER PAGO] Código: {codigo_original}")
             
             notif = None
+            ya_procesada = False
             
             # Buscar en Supabase
             if self.supabase_service:
+                # Primero buscar notificaciones NO respondidas
                 response = self.supabase_service.client.table('notificaciones_pos') \
                     .select('*, miembros(nombres, apellido_paterno, apellido_materno, telefono)') \
                     .eq('codigo_pago_generado', codigo_normalizado) \
@@ -185,6 +187,36 @@ class EscanearCodigoDialogo(QDialog):
                         'apellido_materno': miembro.get('apellido_materno', '')
                     }
                     logging.info(f"[ESCÁNER PAGO] Notificación encontrada: {notif['id_notificacion']}")
+                else:
+                    # Si no encuentra pendiente, buscar TODAS (incluyendo respondidas)
+                    response = self.supabase_service.client.table('notificaciones_pos') \
+                        .select('*, miembros(nombres, apellido_paterno, apellido_materno, telefono)') \
+                        .eq('codigo_pago_generado', codigo_normalizado) \
+                        .execute()
+                    
+                    if response.data and len(response.data) > 0:
+                        item = response.data[0]
+                        miembro = item.get('miembros') or {}
+                        
+                        notif = {
+                            'id_notificacion': item['id_notificacion'],
+                            'id_miembro': item['id_miembro'],
+                            'tipo_notificacion': item['tipo_notificacion'],
+                            'asunto': item['asunto'],
+                            'monto_pendiente': item.get('monto_pendiente'),
+                            'codigo_pago_generado': item.get('codigo_pago_generado'),
+                            'nombres': miembro.get('nombres', ''),
+                            'apellido_paterno': miembro.get('apellido_paterno', ''),
+                            'apellido_materno': miembro.get('apellido_materno', ''),
+                            'respondida': item.get('respondida', False)
+                        }
+                        
+                        # Verificar si ya fue procesada
+                        if item.get('respondida'):
+                            ya_procesada = True
+                            logging.info(f"[ESCÁNER PAGO] ⚠️ Notificación ya procesada: {notif['id_notificacion']}")
+                        else:
+                            logging.info(f"[ESCÁNER PAGO] Notificación encontrada: {notif['id_notificacion']}")
             else:
                 # Fallback a PostgreSQL
                 notif = self.pg_manager.buscar_notificacion_por_codigo_pago(codigo_normalizado)
@@ -194,6 +226,18 @@ class EscanearCodigoDialogo(QDialog):
             if notif:
                 # Guardar y cerrar
                 self.notificacion = notif
+                
+                # Si ya fue procesada, mostrar advertencia pero permitir abrir
+                if ya_procesada:
+                    from ui.components import show_warning_dialog
+                    show_warning_dialog(
+                        self,
+                        "Código ya procesado",
+                        f"Este código (CASH-{notif['id_notificacion']}) ya fue procesado.\n"
+                        f"Miembro: {notif['nombres']} {notif['apellido_paterno']}\n"
+                        f"Monto: ${notif.get('monto_pendiente', 0)}"
+                    )
+                
                 self.accept()
             else:
                 show_error_dialog(
