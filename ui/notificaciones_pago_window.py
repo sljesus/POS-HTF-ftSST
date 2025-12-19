@@ -228,9 +228,30 @@ class ConfirmarPagoDialog(QDialog):
             # Obtener observaciones del usuario
             observaciones = self.observaciones_input.toPlainText().strip() or None
             
-            # Delegar todo el procesamiento al gestor centralizado
+            # Usar Edge Function de Supabase para confirmar pago
+            id_notificacion = self.notificacion['id_notificacion']
+            
+            if self.supabase_service and self.supabase_service.is_connected:
+                logging.info(f"[PAGO] Confirmando pago {id_notificacion} con Edge Function")
+                
+                resultado = self.supabase_service.confirmar_pago_efectivo_edge(id_notificacion)
+                
+                if resultado.get('success'):
+                    logging.info(f"✅ Pago confirmado por Edge Function: {resultado.get('message')}")
+                    show_success_dialog(
+                        self,
+                        "Pago Confirmado",
+                        "El pago ha sido confirmado exitosamente.\nLa membresía/visita está activada."
+                    )
+                    logging.info(f"Pago confirmado exitosamente para notificación {id_notificacion}")
+                    self.accept()
+                    return
+            
+            # Fallback: usar método local si no hay conexión a Supabase
+            logging.info(f"[PAGO] Usando fallback a método local para {id_notificacion}")
+            
             exito = self.pg_manager.confirmar_pago_efectivo(
-                self.notificacion['id_notificacion'],
+                id_notificacion,
                 observaciones
             )
             
@@ -240,7 +261,7 @@ class ConfirmarPagoDialog(QDialog):
                     "Pago Confirmado",
                     "El pago ha sido confirmado exitosamente.\nLa membresía/visita está activada."
                 )
-                logging.info(f"Pago confirmado exitosamente para notificación {self.notificacion['id_notificacion']}")
+                logging.info(f"Pago confirmado exitosamente para notificación {id_notificacion}")
                 self.accept()
             else:
                 show_error_dialog(

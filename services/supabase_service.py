@@ -394,3 +394,49 @@ class SupabaseService:
         except Exception as e:
             logging.error(f"Error obteniendo estado de lockers: {e}")
             return {'total': 0, 'occupied': 0, 'available': 0}
+    
+    def confirmar_pago_efectivo_edge(self, id_notificacion: int) -> dict:
+        """
+        Llamar Edge Function de Supabase para confirmar pago en efectivo
+        
+        Args:
+            id_notificacion: ID de la notificación de pago
+        
+        Returns:
+            Diccionario con resultado: {'success': bool, 'message': str, 'data': dict}
+        """
+        try:
+            if not self.is_connected or not self.client:
+                return {
+                    'success': False,
+                    'message': 'No conectado a Supabase',
+                    'data': None
+                }
+            
+            # Llamar Edge Function
+            response = self.client.functions.invoke(
+                'confirm-cash-payment',
+                invoke_options={
+                    'body': {
+                        'id_notificacion': id_notificacion
+                    }
+                }
+            )
+            
+            # Verificar respuesta
+            if hasattr(response, 'data'):
+                return response.data
+            else:
+                return {
+                    'success': True,
+                    'message': 'Pago confirmado',
+                    'data': response
+                }
+                
+        except Exception as e:
+            logging.error(f"Error llamando Edge Function confirm-cash-payment: {e}")
+            return {
+                'success': False,
+                'message': f'Error: {str(e)}',
+                'data': None
+            }

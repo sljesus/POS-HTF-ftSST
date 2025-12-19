@@ -331,7 +331,7 @@ class PagosEfectivoWindow(QWidget):
             logging.error(f"Error sincronizando notificación a local: {e}")
     
     def _procesar_pago_interno(self, id_notificacion: int):
-        """Procesar un pago en efectivo usando el método centralizado."""
+        """Procesar un pago en efectivo usando la Edge Function de Supabase."""
         # Obtener notificación completa
         notif_dict = self._obtener_notificacion_completa(id_notificacion)
         if not notif_dict:
@@ -339,23 +339,57 @@ class PagosEfectivoWindow(QWidget):
             return
 
         try:
-            # Usar el método centralizado de PostgresManager
-            success = self.pg_manager.confirmar_pago_efectivo(id_notificacion)
-
-            if success:
-                # Refrescar lista
-                self.cargar_notificaciones()
-
-                # Emitir señal para que la ventana principal pueda reaccionar
-                self.pago_confirmado.emit({
-                    "id_notificacion": id_notificacion,
-                    "id_miembro": notif_dict.get("id_miembro"),
-                    "monto": notif_dict.get("monto_pendiente", 0),
-                })
+            # Usar Edge Function de Supabase para evitar duplicados
+            if self.supabase_service and self.supabase_service.is_connected:
+                logging.info(f"[PAGO EFECTIVO] Llamando Edge Function para notificación {id_notificacion}")
                 
-                show_info_dialog(self, "Pago Confirmado", "El pago ha sido procesado exitosamente.")
+                result = self.supabase_service.confirmar_pago_efectivo_edge(id_notificacion)
+                
+                if result.get('success'):
+                    # Refrescar lista
+                    self.cargar_notificaciones()
+
+                    # Emitir señal para que la ventana principal pueda reaccionar
+                    self.pago_confirmado.emit({
+                        "id_notificacion": id_notificacion,
+                        "id_miembro": notif_dict.get("id_miembro"),
+                        "monto": notif_dict.get("monto_pendiente", 0),
+                    })
+                    
+                    logging.info(f"✅ Pago procesado exitosamente: {result.get('message')}")
+                    show_info_dialog(self, "Pago Confirmado", "El pago ha sido procesado exitosamente.")
+                else:
+                    logging.warning(f"Edge Function retornó error: {result.get('message')}")
+                    
+                    # Fallback al método antiguo si Edge Function falla
+                    logging.info("Intentando fallback al método local...")
+                    success = self.pg_manager.confirmar_pago_efectivo(id_notificacion)
+                    
+                    if success:
+                        self.cargar_notificaciones()
+                        self.pago_confirmado.emit({
+                            "id_notificacion": id_notificacion,
+                            "id_miembro": notif_dict.get("id_miembro"),
+                            "monto": notif_dict.get("monto_pendiente", 0),
+                        })
+                        show_info_dialog(self, "Pago Confirmado", "El pago ha sido procesado (modo local).")
+                    else:
+                        show_error_dialog(self, "Error", "No se pudo procesar el pago en ningún método.")
             else:
-                show_error_dialog(self, "Error", "No se pudo procesar el pago.")
+                # Si no hay conexión a Supabase, usar método local
+                logging.info(f"[PAGO EFECTIVO] No hay conexión Supabase, usando método local para {id_notificacion}")
+                success = self.pg_manager.confirmar_pago_efectivo(id_notificacion)
+                
+                if success:
+                    self.cargar_notificaciones()
+                    self.pago_confirmado.emit({
+                        "id_notificacion": id_notificacion,
+                        "id_miembro": notif_dict.get("id_miembro"),
+                        "monto": notif_dict.get("monto_pendiente", 0),
+                    })
+                    show_info_dialog(self, "Pago Confirmado", "El pago ha sido procesado (modo offline).")
+                else:
+                    show_error_dialog(self, "Error", "No se pudo procesar el pago.")
                 
         except Exception as e:
             logging.error(f"Error procesando pago en PagosEfectivoWindow: {e}", exc_info=True)

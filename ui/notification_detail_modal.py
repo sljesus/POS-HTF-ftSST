@@ -425,7 +425,7 @@ class NotificationDetailModal(QDialog):
     
     def procesar_pago(self):
         """
-        Procesar pago en efectivo.
+        Procesar pago en efectivo usando Edge Function de Supabase.
         """
         try:
             id_notificacion = self.notificacion_data.get("id_notificacion")
@@ -450,62 +450,47 @@ class NotificationDetailModal(QDialog):
                     id_notificacion,
                 )
 
-            # Intentar usar el servicio centralizado si está disponible
-            try:
-                from services.cash_payment_service import confirmar_pago_efectivo_pos
+            # Intentar usar Edge Function de Supabase primero
+            if self.supabase_service and self.supabase_service.is_connected:
+                logging.info(f"[PAGO] Llamando Edge Function para notificación {id_notificacion}")
                 
-                resultado = confirmar_pago_efectivo_pos(
-                    parent=self,
-                    pg_manager=self.pg_manager,
-                    supabase_service=self.supabase_service,
-                    sync_manager=self.sync_manager,
-                    user_data=self.user_data,
-                    notif_data=notif_completa,
-                )
-
-                if resultado.get("processed"):
-                    # Notificar a la ventana principal para que actualice contadores / UI
-                    self.notificacion_procesada.emit(
-                        {
-                            "id_notificacion": resultado.get(
-                                "id_notificacion", id_notificacion
-                            ),
-                            "tipo": "pago_efectivo",
-                            "id_miembro": resultado.get(
-                                "id_miembro", notif_completa.get("id_miembro")
-                            ),
-                            "monto": resultado.get(
-                                "monto", notif_completa.get("monto_pendiente", 0)
-                            ),
-                        }
-                    )
-                    self.accept()
-            
-            except ImportError:
-                # Fallback: usar el método centralizado de PostgresManager
-                logging.warning("Servicio de pagos no disponible, usando método centralizado de PostgresManager")
+                resultado = self.supabase_service.confirmar_pago_efectivo_edge(id_notificacion)
                 
-                try:
-                    # Usar el método completo de PostgresManager que actualiza todas las tablas
-                    success = self.pg_manager.confirmar_pago_efectivo(id_notificacion)
+                if resultado.get('success'):
+                    logging.info(f"✅ Pago confirmado por Edge Function: {resultado.get('message')}")
                     
-                    if success:
-                        # Emitir señal de notificación procesada
-                        self.notificacion_procesada.emit({
-                            "id_notificacion": id_notificacion,
-                            "tipo": "pago_efectivo",
-                            "id_miembro": notif_completa.get("id_miembro"),
-                            "monto": notif_completa.get("monto_pendiente", 0),
-                        })
-                        
-                        show_info_dialog(self, "Pago Confirmado", "Pago procesado exitosamente.")
-                        self.accept()
-                    else:
-                        show_error_dialog(self, "Error", "No se pudo confirmar el pago en la base de datos.")
+                    # Emitir señal de notificación procesada
+                    self.notificacion_procesada.emit({
+                        "id_notificacion": id_notificacion,
+                        "tipo": "pago_efectivo",
+                        "id_miembro": notif_completa.get("id_miembro"),
+                        "monto": notif_completa.get("monto_pendiente", 0),
+                    })
+                    
+                    show_info_dialog(self, "Pago Confirmado", "Pago procesado exitosamente.")
+                    self.accept()
+                    return
+                else:
+                    logging.warning(f"Edge Function falló: {resultado.get('message')}, usando fallback...")
+            
+            # Fallback: usar el método centralizado de PostgresManager
+            logging.info(f"[PAGO] Intentando fallback con método local para {id_notificacion}")
+            
+            success = self.pg_manager.confirmar_pago_efectivo(id_notificacion)
+            
+            if success:
+                # Emitir señal de notificación procesada
+                self.notificacion_procesada.emit({
+                    "id_notificacion": id_notificacion,
+                    "tipo": "pago_efectivo",
+                    "id_miembro": notif_completa.get("id_miembro"),
+                    "monto": notif_completa.get("monto_pendiente", 0),
+                })
                 
-                except Exception as fallback_error:
-                    logging.error(f"Error en fallback: {fallback_error}")
-                    show_error_dialog(self, "Error", f"Error procesando pago: {str(fallback_error)}")
+                show_info_dialog(self, "Pago Confirmado", "Pago procesado exitosamente (modo local).")
+                self.accept()
+            else:
+                show_error_dialog(self, "Error", "No se pudo confirmar el pago.")
 
         except Exception as e:
             logging.error(
