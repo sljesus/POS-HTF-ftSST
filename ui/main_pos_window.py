@@ -203,10 +203,6 @@ class MainPOSWindow(QMainWindow):
         btn_escanear_pago.clicked.connect(self.debug_escaneo_pago)
         grid.addWidget(btn_escanear_pago, 0, 2)
         
-        btn_historial = TileButton("Historial", "fa5s.history", WindowsPhoneTheme.TILE_PURPLE)
-        btn_historial.clicked.connect(self.abrir_historial)
-        grid.addWidget(btn_historial, 1, 0)
-        
         btn_cierre = TileButton("Cierre de Caja", "fa5s.lock", WindowsPhoneTheme.TILE_MAGENTA)
         btn_cierre.clicked.connect(self.abrir_cierre_caja)
         grid.addWidget(btn_cierre, 1, 1)
@@ -349,9 +345,9 @@ class MainPOSWindow(QMainWindow):
             btn_catalogo_lockers.clicked.connect(self.abrir_catalogo_lockers)
             admin_grid.addWidget(btn_catalogo_lockers, 1, 1)
             
-            # Espacio para futuras funciones
-            # btn_reportes = TileButton("Reportes", "fa5s.chart-bar", WindowsPhoneTheme.TILE_ORANGE)
-            # admin_grid.addWidget(btn_reportes, 1, 3)
+            btn_historial_ventas = TileButton("Historial\nVentas", "fa5s.history", WindowsPhoneTheme.TILE_PURPLE)
+            btn_historial_ventas.clicked.connect(self.abrir_historial)
+            admin_grid.addWidget(btn_historial_ventas, 1, 2)
         else:
             # Si no es administrador, mostrar mensaje
             no_access_label = StyledLabel(
