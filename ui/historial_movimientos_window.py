@@ -269,13 +269,14 @@ class HistorialMovimientosWindow(QWidget):
             
             # Detener hilo anterior si existe
             if self.loader_thread and self.loader_thread.isRunning():
-                self.loader_thread.terminate()
-                self.loader_thread.wait()
+                self.loader_thread.quit()
+                self.loader_thread.wait(1000)  # Esperar hasta 1 segundo
             
             # Crear y ejecutar hilo de carga
             self.loader_thread = MovimientosLoaderThread(self.pg_manager)
             self.loader_thread.movimientos_loaded.connect(self.procesar_datos_movimientos)
             self.loader_thread.error_occurred.connect(self.mostrar_error_carga)
+            self.loader_thread.finished.connect(self.on_thread_finished)
             self.loader_thread.start()
             
         except Exception as e:
@@ -286,6 +287,10 @@ class HistorialMovimientosWindow(QWidget):
                 "No se pudieron cargar los movimientos",
                 detail=str(e)
             )
+    
+    def on_thread_finished(self):
+        """Callback cuando el thread termina"""
+        pass
     
     def procesar_datos_movimientos(self, rows):
         """Procesar los datos de movimientos cargados desde la base de datos"""
@@ -584,7 +589,16 @@ class HistorialMovimientosWindow(QWidget):
         """Evento al cerrar la ventana"""
         # Detener hilo de carga si está activo
         if self.loader_thread and self.loader_thread.isRunning():
-            self.loader_thread.terminate()
-            self.loader_thread.wait()
+            self.loader_thread.quit()
+            if not self.loader_thread.wait(2000):  # Esperar hasta 2 segundos
+                self.loader_thread.terminate()
+                self.loader_thread.wait()
             
         super().closeEvent(event)
+    
+    def __del__(self):
+        """Destructor para limpiar el thread"""
+        if hasattr(self, 'loader_thread') and self.loader_thread:
+            if self.loader_thread.isRunning():
+                self.loader_thread.quit()
+                self.loader_thread.wait(1000)
