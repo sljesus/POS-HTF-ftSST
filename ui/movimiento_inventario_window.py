@@ -6,7 +6,7 @@ Usando componentes reutilizables del sistema de diseño
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, 
-    QPushButton, QLineEdit, QSpinBox, QTextEdit,
+    QPushButton, QLineEdit, QTextEdit,
     QLabel, QComboBox, QDateEdit, QScrollArea,
     QFrame, QSizePolicy
 )
@@ -28,6 +28,7 @@ from ui.components import (
     show_info_dialog,
     show_warning_dialog,
     show_error_dialog,
+    TouchNumericInput,
     show_success_dialog
 )
 from database.postgres_manager import PostgresManager
@@ -126,11 +127,11 @@ class MovimientoInventarioWindow(QWidget):
         cantidad_label = StyledLabel("Cantidad *", bold=True, size=WindowsPhoneTheme.FONT_SIZE_SUBTITLE)
         panel_layout.addWidget(cantidad_label)
         
-        self.cantidad_spin = QSpinBox()
-        self.cantidad_spin.setRange(1, 9999)
-        self.cantidad_spin.setValue(1)
-        self.cantidad_spin.setMinimumHeight(46)
-        self.cantidad_spin.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
+        self.cantidad_spin = TouchNumericInput(
+            minimum=1,
+            maximum=9999,
+            default_value=1
+        )
         panel_layout.addWidget(self.cantidad_spin)
         
         # Tipo de movimiento (solo para entradas)

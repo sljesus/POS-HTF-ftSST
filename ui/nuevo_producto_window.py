@@ -6,7 +6,7 @@ Permite agregar productos normales (varios) y suplementos
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QTextEdit, QComboBox, QCheckBox,
-    QDoubleSpinBox, QSpinBox, QDateEdit, QScrollArea,
+    QDateEdit, QScrollArea,
     QLabel, QFrame
 )
 from PySide6.QtCore import Qt, Signal, QDate, QTimer, QEvent
@@ -18,6 +18,8 @@ from ui.components import (
     TileButton,
     create_page_layout,
     ContentPanel,
+    TouchNumericInput,
+    TouchMoneyInput,
     SectionTitle,
     show_info_dialog,
     show_warning_dialog,
@@ -124,11 +126,12 @@ class NuevoProductoWindow(QWidget):
         comunes_form.addRow("Descripción:", self.descripcion_input)
         
         # Precio de Venta
-        self.precio_input = QDoubleSpinBox()
-        self.precio_input.setPrefix("$ ")
-        self.precio_input.setDecimals(2)
-        self.precio_input.setMaximum(999999.99)
-        self.precio_input.setMinimumHeight(40)
+        self.precio_input = TouchMoneyInput(
+            minimum=0.01,
+            maximum=999999.99,
+            decimals=2,
+            default_value=0.0
+        )
         comunes_form.addRow("Precio de Venta *:", self.precio_input)
         
         # Activo
@@ -180,11 +183,13 @@ class NuevoProductoWindow(QWidget):
         normales_form.addRow("Refrigeración:", self.refrigeracion_check)
         
         # Peso
-        self.peso_input = QDoubleSpinBox()
-        self.peso_input.setSuffix(" gr")
-        self.peso_input.setDecimals(2)
-        self.peso_input.setMaximum(999999.99)
-        self.peso_input.setMinimumHeight(40)
+        self.peso_input = TouchMoneyInput(
+            minimum=0.0,
+            maximum=999999.99,
+            decimals=2,
+            default_value=0.0,
+            prefix=" gr "
+        )
         normales_form.addRow("Peso:", self.peso_input)
         
         normales_layout.addLayout(normales_form)
@@ -228,11 +233,13 @@ class NuevoProductoWindow(QWidget):
         suplementos_form.addRow("Tipo de Suplemento *:", self.tipo_suplemento_combo)
         
         # Peso Neto
-        self.peso_neto_input = QDoubleSpinBox()
-        self.peso_neto_input.setSuffix(" gr")
-        self.peso_neto_input.setDecimals(2)
-        self.peso_neto_input.setMaximum(999999.99)
-        self.peso_neto_input.setMinimumHeight(40)
+        self.peso_neto_input = TouchMoneyInput(
+            minimum=0.0,
+            maximum=999999.99,
+            decimals=2,
+            default_value=0.0,
+            prefix=" gr "
+        )
         suplementos_form.addRow("Peso Neto:", self.peso_neto_input)
         
         # Fecha de Vencimiento

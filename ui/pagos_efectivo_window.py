@@ -5,7 +5,7 @@ Sigue patrones establecidos en CierreCajaWindow y NuevaVentaWindow
 """
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QLineEdit,
     QHeaderView, QAbstractItemView, QSizePolicy
 )
@@ -27,7 +27,7 @@ from ui.components import (
 )
 
 
-class PagosEfectivoWindow(QWidget):
+class PagosEfectivoWindow(QDialog):
     """Ventana para gestionar pagos en efectivo pendientes"""
     
     pago_confirmado = Signal(dict)

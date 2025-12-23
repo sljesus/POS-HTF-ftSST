@@ -6,7 +6,7 @@ Usando componentes reutilizables del sistema de diseño
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
-    QFrame, QGridLayout, QSpinBox, QComboBox,
+    QFrame, QGridLayout, QComboBox,
     QHeaderView, QDateEdit, QTextEdit, QScrollArea, QSizePolicy
 )
 from PySide6.QtCore import Qt, Signal, QDate, QTimer
@@ -30,7 +30,8 @@ from ui.components import (
     show_success_dialog,
     show_warning_dialog,
     show_error_dialog,
-    show_confirmation_dialog
+    show_confirmation_dialog,
+    TouchNumericInput,
 )
 from database.postgres_manager import PostgresManager
 
@@ -288,10 +289,11 @@ class NuevaVentaWindow(QWidget):
             self.carrito_table.setItem(row, 1, precio_item)
             
             # Cantidad (editable)
-            cantidad_spin = QSpinBox()
-            cantidad_spin.setMinimum(1)
-            cantidad_spin.setMaximum(item['stock_disponible'])
-            cantidad_spin.setValue(item['cantidad'])
+            cantidad_spin = TouchNumericInput(
+                minimum=1,
+                maximum=item['stock_disponible'],
+                default_value=item['cantidad']
+            )
             cantidad_spin.valueChanged.connect(lambda val, idx=row: self.cambiar_cantidad(idx, val))
             self.carrito_table.setCellWidget(row, 2, cantidad_spin)
             

@@ -4,10 +4,10 @@ Sistema de diseño unificado para toda la aplicación HTF POS
 """
 
 from PySide6.QtWidgets import (
-    QPushButton, QLabel, QFrame, QVBoxLayout, QHBoxLayout, QWidget, QDialog
+    QPushButton, QLabel, QFrame, QVBoxLayout, QHBoxLayout, QWidget, QDialog, QLineEdit
 )
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont, QCursor
+from PySide6.QtCore import Qt, QSize, Signal
+from PySide6.QtGui import QFont, QCursor, QDoubleValidator, QIntValidator
 import qtawesome as qta
 
 
@@ -25,7 +25,7 @@ class WindowsPhoneTheme:
     TILE_BLUE = "#0078d7"
     TILE_TEAL = "#00aba9"
     TILE_MAGENTA = "#e3008c"
-    TILE_GRAY = "#737373"
+    TILE_GRAY = "#B39DDB"
     
     # Colores de fondo
     BG_BLACK = "#000000"
@@ -418,6 +418,10 @@ def apply_windows_phone_stylesheet(widget):
         
         QPushButton#tabButton[tileColor="{theme.TILE_PURPLE}"] {{
             background-color: {theme.TILE_PURPLE};
+        }}
+        
+        QPushButton#tabButton[tileColor="{theme.TILE_GRAY}"] {{
+            background-color: {theme.TILE_GRAY};
         }}
         
         QPushButton#tabButton:hover {{
@@ -1098,3 +1102,211 @@ def show_input_dialog(parent, title, message, placeholder=""):
         return dialog.get_text(), True
     return "", False
 
+
+# =====================================================
+# CAMPOS NUMÉRICOS OPTIMIZADOS PARA PANTALLA TÁCTIL
+# =====================================================
+
+class TouchNumericInput(QLineEdit):
+    """
+    Campo de entrada numérica optimizado para pantallas táctiles.
+    Reemplaza QSpinBox/QDoubleSpinBox eliminando las flechas y usando
+    validación de entrada con teclado en pantalla táctil.
+    
+    Ventajas sobre SpinBox:
+    - Sin flechas pequeñas difíciles de tocar
+    - Campo de texto grande y fácil de seleccionar
+    - Teclado numérico automático en dispositivos táctiles
+    - Mejor experiencia de usuario en tablets y touch screens
+    """
+    
+    valueChanged = Signal(int)  # Señal compatible con QSpinBox
+    
+    def __init__(self, minimum=0, maximum=999999, default_value=0, parent=None):
+        super().__init__(parent)
+        
+        self._minimum = minimum
+        self._maximum = maximum
+        
+        # Validador para números enteros
+        self.validator = QIntValidator(minimum, maximum, self)
+        self.setValidator(self.validator)
+        
+        # Configurar estilo táctil
+        self.setMinimumHeight(50)  # Altura táctil amigable
+        self.setAlignment(Qt.AlignCenter)
+        self.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_LARGE))
+        
+        # Estilo visual
+        self.setStyleSheet(f"""
+            QLineEdit {{
+                border: 2px solid {WindowsPhoneTheme.BORDER_COLOR};
+                border-radius: 4px;
+                padding: 10px 15px;
+                background-color: white;
+                font-size: 18px;
+                font-weight: bold;
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {WindowsPhoneTheme.TILE_BLUE};
+                background-color: #f0f8ff;
+            }}
+        """)
+        
+        # Valor inicial
+        self.setValue(default_value)
+        
+        # Conectar señal de cambio
+        self.textChanged.connect(self._on_text_changed)
+    
+    def setValue(self, value):
+        """Establecer valor (compatible con QSpinBox)"""
+        value = max(self._minimum, min(self._maximum, int(value)))
+        self.setText(str(value))
+    
+    def value(self):
+        """Obtener valor (compatible con QSpinBox)"""
+        text = self.text().strip()
+        if not text:
+            return self._minimum
+        try:
+            return int(text)
+        except ValueError:
+            return self._minimum
+    
+    def setRange(self, minimum, maximum):
+        """Establecer rango (compatible con QSpinBox)"""
+        self._minimum = minimum
+        self._maximum = maximum
+        self.validator.setRange(minimum, maximum)
+    
+    def setMinimum(self, minimum):
+        """Establecer mínimo"""
+        self._minimum = minimum
+        self.validator.setBottom(minimum)
+    
+    def setMaximum(self, maximum):
+        """Establecer máximo"""
+        self._maximum = maximum
+        self.validator.setTop(maximum)
+    
+    def _on_text_changed(self, text):
+        """Emitir señal cuando cambia el valor"""
+        if text.strip():
+            try:
+                self.valueChanged.emit(int(text))
+            except ValueError:
+                pass
+
+
+class TouchMoneyInput(QLineEdit):
+    """
+    Campo de entrada monetaria optimizado para pantallas táctiles.
+    Reemplaza QDoubleSpinBox para cantidades de dinero.
+    
+    Características:
+    - Sin flechas (mejor para táctil)
+    - Validación de decimales (2 dígitos)
+    - Formato con símbolo de moneda
+    - Altura apropiada para pantalla táctil
+    """
+    
+    valueChanged = Signal(float)  # Señal compatible con QDoubleSpinBox
+    
+    def __init__(self, minimum=0.0, maximum=999999.99, decimals=2, default_value=0.0, prefix="$ ", parent=None):
+        super().__init__(parent)
+        
+        self._minimum = minimum
+        self._maximum = maximum
+        self._decimals = decimals
+        self._prefix = prefix
+        
+        # Validador para números decimales
+        self.validator = QDoubleValidator(minimum, maximum, decimals, self)
+        self.validator.setNotation(QDoubleValidator.StandardNotation)
+        
+        # Configurar estilo táctil
+        self.setMinimumHeight(50)
+        self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_LARGE))
+        
+        # Estilo visual
+        self.setStyleSheet(f"""
+            QLineEdit {{
+                border: 2px solid {WindowsPhoneTheme.BORDER_COLOR};
+                border-radius: 4px;
+                padding: 10px 15px;
+                background-color: white;
+                font-size: 18px;
+                font-weight: bold;
+                color: {WindowsPhoneTheme.TILE_GREEN};
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {WindowsPhoneTheme.TILE_GREEN};
+                background-color: #f0fff0;
+            }}
+        """)
+        
+        # Valor inicial
+        self.setValue(default_value)
+        
+        # Conectar señales
+        self.textChanged.connect(self._on_text_changed)
+        self.editingFinished.connect(self._format_value)
+    
+    def setValue(self, value):
+        """Establecer valor (compatible con QDoubleSpinBox)"""
+        value = max(self._minimum, min(self._maximum, float(value)))
+        formatted = f"{self._prefix}{value:.{self._decimals}f}"
+        self.setText(formatted)
+    
+    def value(self):
+        """Obtener valor numérico (compatible con QDoubleSpinBox)"""
+        text = self.text().replace(self._prefix, "").strip()
+        if not text:
+            return self._minimum
+        try:
+            return float(text)
+        except ValueError:
+            return self._minimum
+    
+    def setRange(self, minimum, maximum):
+        """Establecer rango (compatible con QDoubleSpinBox)"""
+        self._minimum = minimum
+        self._maximum = maximum
+        self.validator.setRange(minimum, maximum, self._decimals)
+    
+    def setMinimum(self, minimum):
+        """Establecer mínimo"""
+        self._minimum = minimum
+        self.validator.setBottom(minimum)
+    
+    def setMaximum(self, maximum):
+        """Establecer máximo"""
+        self._maximum = maximum
+        self.validator.setTop(maximum)
+    
+    def setDecimals(self, decimals):
+        """Establecer cantidad de decimales"""
+        self._decimals = decimals
+        self.validator.setDecimals(decimals)
+    
+    def setPrefix(self, prefix):
+        """Establecer prefijo (ej: '$ ')"""
+        self._prefix = prefix
+        current_value = self.value()
+        self.setValue(current_value)
+    
+    def _on_text_changed(self, text):
+        """Emitir señal cuando cambia el valor"""
+        clean_text = text.replace(self._prefix, "").strip()
+        if clean_text:
+            try:
+                self.valueChanged.emit(float(clean_text))
+            except ValueError:
+                pass
+    
+    def _format_value(self):
+        """Formatear valor al perder el foco"""
+        current = self.value()
+        self.setValue(current)

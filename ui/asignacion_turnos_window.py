@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QComboBox, QDateEdit, QLabel,
-    QTimeEdit, QCheckBox, QSpinBox
+    QTimeEdit, QCheckBox
 )
 from PySide6.QtCore import Qt, Signal, QDate, QTime
 from PySide6.QtGui import QFont
@@ -27,7 +27,8 @@ from ui.components import (
     show_warning_dialog,
     show_error_dialog,
     show_success_dialog,
-    show_confirmation_dialog
+    show_confirmation_dialog,
+    TouchMoneyInput,
 )
 
 
@@ -188,11 +189,12 @@ class AsignacionTurnosWindow(QWidget):
         label_monto = StyledLabel("Monto Inicial $:", bold=True)
         grid.addWidget(label_monto, row, 0)
         
-        self.monto_inicial = QSpinBox()
-        self.monto_inicial.setRange(0, 100000)
-        self.monto_inicial.setValue(0)
-        self.monto_inicial.setMinimumHeight(40)
-        self.monto_inicial.setStyleSheet(input_style)
+        self.monto_inicial = TouchMoneyInput(
+            minimum=0.0,
+            maximum=100000.0,
+            decimals=2,
+            default_value=0.0
+        )
         grid.addWidget(self.monto_inicial, row, 1)
         row += 1
         

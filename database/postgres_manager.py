@@ -75,10 +75,10 @@ class PostgresManager:
             # Probar conexión
             response = self.client.table('usuarios').select('id_usuario').limit(1).execute()
             self.is_connected = True
-            logging.info("✅ Conexión exitosa a Supabase")
+            logging.info("[OK] Conexión exitosa a Supabase")
             
         except Exception as e:
-            logging.error(f"❌ Error conectando a Supabase: {e}")
+            logging.error(f"[ERROR] Error conectando a Supabase: {e}")
             self.is_connected = False
             raise
     
@@ -103,11 +103,11 @@ class PostgresManager:
             
             # Probar acceso a tabla usuarios
             response = self.client.table('usuarios').select('id_usuario').limit(1).execute()
-            logging.info("✅ Base de datos Supabase verificada correctamente")
+            logging.info("[OK] Base de datos Supabase verificada correctamente")
             return True
             
         except Exception as e:
-            logging.error(f"❌ Error verificando base de datos: {e}")
+            logging.error(f"[ERROR] Error verificando base de datos: {e}")
             return False
     
     # ========== AUTENTICACIÓN ==========
@@ -139,7 +139,7 @@ class PostgresManager:
             
             # Verificar la contraseña usando bcrypt
             if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
-                logging.info(f"✅ Autenticación exitosa para usuario: {username}")
+                logging.info(f"[OK] Autenticación exitosa para usuario: {username}")
                 
                 # Actualizar último acceso
                 self.client.table('usuarios').update({'ultimo_acceso': datetime.now().isoformat()}).eq('id_usuario', user['id_usuario']).execute()
@@ -204,7 +204,7 @@ class PostgresManager:
             
             if response.data:
                 user_id = response.data[0]['id_usuario']
-                logging.info(f"✅ Usuario '{username}' creado exitosamente con ID: {user_id}")
+                logging.info(f"[OK] Usuario '{username}' creado exitosamente con ID: {user_id}")
                 return user_id
             else:
                 logging.error(f"No se pudo crear el usuario '{username}'")
@@ -246,7 +246,7 @@ class PostgresManager:
             update_response = self.client.table('usuarios').update({'contrasenia': hashed_password}).eq('id_usuario', user_id).execute()
             
             if update_response.data:
-                logging.info(f"✅ Contraseña actualizada para usuario: {username}")
+                logging.info(f"[OK] Contraseña actualizada para usuario: {username}")
                 return True
             else:
                 logging.error(f"No se pudo actualizar la contraseña para {username}")

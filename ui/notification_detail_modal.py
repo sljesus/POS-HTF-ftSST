@@ -457,7 +457,7 @@ class NotificationDetailModal(QDialog):
                 resultado = self.supabase_service.confirmar_pago_efectivo_edge(id_notificacion)
                 
                 if resultado.get('success'):
-                    logging.info(f"✅ Pago confirmado por Edge Function: {resultado.get('message')}")
+                    logging.info(f"[OK] Pago confirmado por Edge Function: {resultado.get('message')}")
                     
                     # Emitir señal de notificación procesada
                     self.notificacion_procesada.emit({

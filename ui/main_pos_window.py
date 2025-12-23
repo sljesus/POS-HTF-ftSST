@@ -151,7 +151,7 @@ class MainPOSWindow(QMainWindow):
             {"name": "Inventario", "icon": "fa5s.boxes", "color": WindowsPhoneTheme.TILE_GREEN, "index": 1},
             {"name": "Miembros", "icon": "fa5s.users", "color": WindowsPhoneTheme.TILE_ORANGE, "index": 2},
             {"name": "Admin", "icon": "fa5s.user-shield", "color": WindowsPhoneTheme.TILE_PURPLE, "index": 3},
-            {"name": "Config", "icon": "fa5s.cog", "color": WindowsPhoneTheme.TILE_TEAL, "index": 4},
+            {"name": "Config", "icon": "fa5s.cog", "color": WindowsPhoneTheme.TILE_GRAY, "index": 4},
         ]
         
         # Crear botones usando componente TabButton
@@ -200,7 +200,7 @@ class MainPOSWindow(QMainWindow):
         grid.addWidget(btn_ventas_dia, 0, 1)
         
         btn_escanear_pago = TileButton("Escanear Código\nPago", "mdi.qrcode-scan", WindowsPhoneTheme.TILE_GREEN)
-        btn_escanear_pago.clicked.connect(self.debug_escaneo_pago)
+        btn_escanear_pago.clicked.connect(self.escanear_codigo_pago)
         grid.addWidget(btn_escanear_pago, 1, 0)
         
         btn_cierre = TileButton("Cierre de Caja", "fa5s.lock", WindowsPhoneTheme.TILE_MAGENTA)
@@ -719,44 +719,26 @@ class MainPOSWindow(QMainWindow):
             logging.error(f"Error abriendo cierre de caja: {e}")
     
     def escanear_codigo_pago(self):
-        """Escanear código QR para procesar pago en efectivo"""
+        """Abrir diálogo para confirmar pago en efectivo escaneando ID venta"""
         try:
-            from ui.escanear_codigo_dialogo import EscanearCodigoDialogo
+            from ui.confirmar_pago_efectivo_dialog import ConfirmarPagoEfectivoDialog
             
-            # Crear diálogo
-            dialog = EscanearCodigoDialogo(
-                self.pg_manager,
+            # Crear y mostrar diálogo simple de escaneo
+            dialogo = ConfirmarPagoEfectivoDialog(
                 self.supabase_service,
-                self.user_data,
                 parent=self
             )
             
-            # Ejecutar diálogo
-            if dialog.exec() == QDialog.Accepted and dialog.notificacion:
-                # Notificación encontrada, abrir modal
-                from ui.notification_detail_modal import NotificationDetailModal
-                detail_modal = NotificationDetailModal(
-                    dialog.notificacion, 
-                    self.pg_manager, 
-                    self.supabase_service, 
-                    self.user_data, 
-                    parent=self,
-                    sync_manager=getattr(self, 'sync_manager', None)
-                )
-                detail_modal.notificacion_procesada.connect(self._on_notificacion_procesada_debug)
-                detail_modal.exec()
-        
+            dialogo.exec()
+            
         except Exception as e:
-            logging.error(f"Error en escanear_codigo_pago: {e}")
+            logging.error(f"Error abriendo ventana de pagos: {e}")
             show_error_dialog(
                 self,
                 "Error",
-                f"Error al abrir escáner:\n{str(e)}"
+                f"Error al abrir escaner:\n{str(e)}"
             )
     
-    def debug_escaneo_pago(self):
-        """Abrir escaneo de código de pago"""
-        self.escanear_codigo_pago()
     
     def debug_procesar_pago(self, dialog):
         """Procesar pago desde el diálogo de debug"""

@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QLineEdit, QSizePolicy, QFrame,
-    QComboBox, QCheckBox
+    QComboBox, QCheckBox, QDialog, QAbstractItemView
 )
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QFont
@@ -25,6 +25,7 @@ from ui.components import (
     show_warning_dialog,
     show_error_dialog
 )
+from ui.editable_catalog_grid import EditableCatalogGrid
 
 
 class InventarioWindow(QWidget):
@@ -227,6 +228,7 @@ class InventarioWindow(QWidget):
         self.inventory_table.verticalHeader().setVisible(False)
         self.inventory_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.inventory_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.inventory_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.inventory_table.setAlternatingRowColors(True)
         self.inventory_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
@@ -273,8 +275,8 @@ class InventarioWindow(QWidget):
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
         
-        btn_actualizar = TileButton("Actualizar", "fa5s.sync", WindowsPhoneTheme.TILE_BLUE)
-        btn_actualizar.clicked.connect(self.cargar_inventario)
+        btn_editar_catalogo = TileButton("Editar Catálogo", "fa5s.edit", WindowsPhoneTheme.TILE_PURPLE)
+        btn_editar_catalogo.clicked.connect(self.abrir_grid_editable)
         
         btn_reporte = TileButton("Generar Reporte", "fa5s.file-excel", WindowsPhoneTheme.TILE_GREEN)
         btn_reporte.clicked.connect(self.generar_reporte)
@@ -285,7 +287,7 @@ class InventarioWindow(QWidget):
         btn_cerrar = TileButton("Cerrar", "fa5s.times", WindowsPhoneTheme.TILE_RED)
         btn_cerrar.clicked.connect(self.cerrar_solicitado.emit)
         
-        buttons_layout.addWidget(btn_actualizar)
+        buttons_layout.addWidget(btn_editar_catalogo)
         buttons_layout.addWidget(btn_reporte)
         buttons_layout.addWidget(btn_bajo_stock)
         buttons_layout.addWidget(btn_cerrar)
@@ -591,5 +593,32 @@ class InventarioWindow(QWidget):
                 self,
                 "Error al generar reporte",
                 "No se pudo crear el archivo de Excel",
+                detail=str(e)
+            )
+    
+    def abrir_grid_editable(self):
+        """Abrir ventana con grid editable del catálogo"""
+        try:
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Editar Catálogo de Productos")
+            dialog.setMinimumSize(1200, 700)
+            
+            layout = QVBoxLayout(dialog)
+            layout.setContentsMargins(0, 0, 0, 0)
+            
+            # Crear grid editable
+            grid_editable = EditableCatalogGrid(self.pg_manager)
+            grid_editable.catalogo_actualizado.connect(self.cargar_inventario)
+            
+            layout.addWidget(grid_editable)
+            
+            dialog.exec()
+            
+        except Exception as e:
+            logging.error(f"Error abriendo grid editable: {e}")
+            show_error_dialog(
+                self,
+                "Error",
+                "No se pudo abrir el editor de catálogo",
                 detail=str(e)
             )
