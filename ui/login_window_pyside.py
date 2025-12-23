@@ -129,13 +129,6 @@ class LoginWindow(QMainWindow):
         login_title.setAlignment(Qt.AlignCenter)
         login_title.setFont(QFont("Segoe UI", 28, QFont.Bold))
         
-        # Indicador de conexión
-        self.connection_label = QLabel("🔴 Sin conexión")
-        self.connection_label.setObjectName("connectionLabel")
-        self.connection_label.setAlignment(Qt.AlignCenter)
-        self.connection_label.setFont(QFont("Segoe UI", 10))
-        self.update_connection_status()
-        
         # Campo de usuario
         user_label = QLabel("Usuario")
         user_label.setObjectName("fieldLabel")
@@ -177,8 +170,7 @@ class LoginWindow(QMainWindow):
         
         # Agregar widgets al layout
         layout.addWidget(login_title)
-        layout.addWidget(self.connection_label)
-        layout.addSpacing(20)
+        layout.addSpacing(30)
         layout.addWidget(user_label)
         layout.addWidget(self.username_input)
         layout.addWidget(password_label)
@@ -234,14 +226,6 @@ class LoginWindow(QMainWindow):
                 margin-bottom: 10px;
                 font-family: '{self.font_title}';
                 font-weight: bold;
-            }}
-            
-            #connectionLabel {{
-                color: #718096;
-                padding: 8px 16px;
-                background-color: #f0f9ff;
-                border-radius: 20px;
-                font-family: '{self.font_text}';
             }}
             
             #fieldLabel {{
@@ -305,42 +289,9 @@ class LoginWindow(QMainWindow):
         """Actualizar el indicador de conexión"""
         # Verificar conexión a PostgreSQL local
         pg_connected = False
-        if self.pg_manager:
-            try:
-                pg_connected = self.pg_manager.connection is not None
-            except:
-                pg_connected = False
-        
-        # Verificar conexión a Supabase
-        supabase_connected = False
-        if self.supabase_service:
-            supabase_connected = self.supabase_service.test_connection()
-        
-        # Actualizar etiqueta según estado
-        if pg_connected and supabase_connected:
-            self.connection_label.setText("🟢 Conectado (Local + Cloud)")
-            self.connection_label.setStyleSheet("""
-                color: #38a169;
-                background-color: #f0fff4;
-                padding: 8px 16px;
-                border-radius: 20px;
-            """)
-        elif pg_connected:
-            self.connection_label.setText("🟡 Conectado (Solo Local)")
-            self.connection_label.setStyleSheet("""
-                color: #d69e2e;
-                background-color: #fffff0;
-                padding: 8px 16px;
-                border-radius: 20px;
-            """)
-        else:
-            self.connection_label.setText("🔴 Sin conexión")
-            self.connection_label.setStyleSheet("""
-                color: #e53e3e;
-                background-color: #fff5f5;
-                padding: 8px 16px;
-                border-radius: 20px;
-            """)
+    def update_connection_status(self):
+        """Actualizar estado de conexión - Eliminado para simplificar UI"""
+        pass
             
     def handle_login(self):
         """Manejar el evento de login"""
