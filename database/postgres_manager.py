@@ -85,11 +85,7 @@ class PostgresManager:
     def close(self):
         """Cerrar conexión (Supabase no requiere cerrar explícitamente)"""
         self.is_connected = False
-        try:
-            logging.info("Conexión a Supabase cerrada")
-        except (ValueError, OSError):
-            # Logging system already shut down during Python cleanup
-            pass
+        # Don't log during cleanup to avoid shutdown race conditions
     
     def close_connection(self):
         """Alias para compatibilidad"""
