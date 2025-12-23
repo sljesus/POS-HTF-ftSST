@@ -251,9 +251,9 @@ Este proyecto está en constante evolución. Las áreas de desarrollo futuro inc
 
 ## 📄 Licencia
 
-Proyecto privado para HTF Gimnasio.
+Proyecto privado para Gimnasio HTF.
 
 ---
 
-**Desarrollado con ❤️ para HTF Gimnasio**  
+**Diseñado y desarrollado con ❤️ para Gimnasio HTF**  
 Sistema POS moderno, táctil y completamente funcional.
