@@ -16,10 +16,16 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('pos_htf.log'),
-        logging.StreamHandler()
+        logging.FileHandler('pos_htf.log', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
     ]
 )
+
+# Configurar encoding UTF-8 para stdout/stderr en Windows
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 try:
     from ui.login_window_pyside import LoginWindow
