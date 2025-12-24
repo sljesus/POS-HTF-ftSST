@@ -24,7 +24,8 @@ from ui.components import (
     show_success_dialog,
     show_warning_dialog,
     show_error_dialog,
-    show_confirmation_dialog
+    show_confirmation_dialog,
+    aplicar_estilo_fecha
 )
 
 
@@ -98,8 +99,8 @@ class FormularioDiaFestivoDialog(QDialog):
         self.input_fecha = QDateEdit()
         self.input_fecha.setDate(QDate.currentDate())
         self.input_fecha.setCalendarPopup(True)
+        aplicar_estilo_fecha(self.input_fecha)
         self.input_fecha.setMinimumHeight(40)
-        self.input_fecha.setStyleSheet(input_style)
         grid.addWidget(self.input_fecha, row, 1)
         row += 1
         
@@ -124,7 +125,7 @@ class FormularioDiaFestivoDialog(QDialog):
         # Tipo de festivo
         grid.addWidget(StyledLabel("Tipo:", bold=True), row, 0)
         self.combo_tipo = QComboBox()
-        self.combo_tipo.addItems(["nacional", "local", "empresarial"])
+        self.combo_tipo.addItems(["nacional", "local", "interno"])
         self.combo_tipo.setMinimumHeight(40)
         self.combo_tipo.setStyleSheet(input_style)
         grid.addWidget(self.combo_tipo, row, 1)
@@ -378,7 +379,8 @@ class DiasFestvosWindow(QWidget):
                 self.tabla_festivos.setItem(row, 3, QTableWidgetItem(tipo))
                 
                 # Descripción
-                desc = festivo.get('descripcion', '')[:50] + ('...' if len(festivo.get('descripcion', '')) > 50 else '')
+                desc_completa = festivo.get('descripcion') or ''
+                desc = desc_completa[:50] + ('...' if len(desc_completa) > 50 else '')
                 self.tabla_festivos.setItem(row, 4, QTableWidgetItem(desc))
                 
                 # Cerrado
@@ -389,7 +391,7 @@ class DiasFestvosWindow(QWidget):
                 self.tabla_festivos.setItem(row, 5, cerrado_item)
                 
                 # Horario especial
-                horario = festivo.get('horario_especial', 'N/A')
+                horario = festivo.get('horario_especial') or 'N/A'
                 self.tabla_festivos.setItem(row, 6, QTableWidgetItem(horario))
             
             logging.info(f"Días festivos cargados: {len(festivos)}")

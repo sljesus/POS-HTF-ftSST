@@ -24,7 +24,8 @@ from ui.components import (
     show_success_dialog,
     show_warning_dialog,
     show_error_dialog,
-    show_confirmation_dialog
+    show_confirmation_dialog,
+    aplicar_estilo_fecha
 )
 
 
@@ -158,8 +159,8 @@ class FormularioPersonalDialog(QDialog):
         self.input_fecha_contratacion = QDateEdit()
         self.input_fecha_contratacion.setDate(QDate.currentDate())
         self.input_fecha_contratacion.setCalendarPopup(True)
+        aplicar_estilo_fecha(self.input_fecha_contratacion)
         self.input_fecha_contratacion.setMinimumHeight(40)
-        self.input_fecha_contratacion.setStyleSheet(input_style)
         grid.addWidget(self.input_fecha_contratacion, row, 1)
         row += 1
         
@@ -245,8 +246,7 @@ class FormularioPersonalDialog(QDialog):
                     'telefono': self.input_telefono.text().strip() or None,
                     'email': self.input_email.text().strip() or None,
                     'numero_empleado': self.input_num_empleado.text().strip() or None,
-                    'fecha_contratacion': fecha_contratacion,
-                    'needs_sync': 1
+                    'fecha_contratacion': fecha_contratacion
                 }).eq('id_personal', self.personal_data['id_personal']).execute()
                 mensaje = "Personal actualizado correctamente"
             else:
@@ -261,8 +261,7 @@ class FormularioPersonalDialog(QDialog):
                     'numero_empleado': self.input_num_empleado.text().strip() or None,
                     'codigo_qr': codigo_qr,
                     'fecha_contratacion': fecha_contratacion,
-                    'activo': 1,
-                    'needs_sync': 1
+                    'activo': 1
                 }).execute()
                 mensaje = "Personal registrado correctamente"
             
@@ -475,8 +474,7 @@ class PersonalWindow(QWidget):
             try:
                 self.pg_manager.client.table('personal').update({
                     'activo': 0,
-                    'fecha_baja': date.today().strftime('%Y-%m-%d'),
-                    'needs_sync': 1
+                    'fecha_baja': date.today().strftime('%Y-%m-%d')
                 }).eq('id_personal', id_personal).execute()
                 
                 show_success_dialog(self, "Éxito", "Personal dado de baja correctamente")

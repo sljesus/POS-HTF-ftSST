@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 import logging
 from datetime import datetime, date
+import qtawesome as qta
 
 # Importar componentes del sistema de diseño
 from ui.components import (
@@ -27,15 +28,16 @@ from ui.components import (
 
 
 class VentasDiaWindow(QWidget):
-    """Widget para ver ventas del día"""
+    """Widget para ver ventas del turno"""
     
     cerrar_solicitado = Signal()
     
-    def __init__(self, pg_manager, supabase_service, user_data, parent=None):
+    def __init__(self, pg_manager, supabase_service, user_data, turno_id=None, parent=None):
         super().__init__(parent)
         self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
+        self.turno_id = turno_id  # ID del turno actual
         
         # Configurar política de tamaño
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -43,14 +45,14 @@ class VentasDiaWindow(QWidget):
         self.setup_ui()
         
     def setup_ui(self):
-        """Configurar interfaz de ventas del día"""
+        """Configurar interfaz de ventas del turno"""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
         # Contenido
         content = QWidget()
-        content_layout = create_page_layout("RESUMEN DE VENTAS - " + date.today().strftime("%d/%m/%Y"))
+        content_layout = create_page_layout("VENTAS DEL TURNO ACTUAL")
         content.setLayout(content_layout)
         
         # Widgets de resumen (sin promedio)
@@ -92,20 +94,30 @@ class VentasDiaWindow(QWidget):
         # Número de ventas
         self.ventas_tile = InfoTile("COMANDAS", "fa5s.shopping-cart", WindowsPhoneTheme.TILE_BLUE)
         self.ventas_count = self.ventas_tile.add_main_value("0")
-        self.ventas_tile.add_secondary_value("comandas del día")
+        self.ventas_tile.add_secondary_value("comandas del turno")
         widgets_layout.addWidget(self.ventas_tile)
         
         parent_layout.addLayout(widgets_layout)
         
     def actualizar_datos(self):
-        """Actualizar datos de ventas del día"""
+        """Actualizar datos de ventas del turno"""
         try:
-            # Obtener ventas del día usando Supabase
+            # Verificar que haya un turno activo
+            if not self.turno_id:
+                show_warning_dialog(
+                    self,
+                    "Turno No Disponible",
+                    "No hay un turno de caja abierto.",
+                    "Debes abrir un turno antes de ver las ventas."
+                )
+                self.total_value.setText("$0.00")
+                self.ventas_count.setText("0")
+                return
+            
+            # Obtener ventas del turno usando Supabase
             response = self.pg_manager.client.table('ventas').select(
                 'id_venta, fecha, total, usuarios(nombre_completo)'
-            ).gte('fecha', f'{date.today()}T00:00:00').lte(
-                'fecha', f'{date.today()}T23:59:59'
-            ).order('fecha', desc=True).execute()
+            ).eq('id_turno', self.turno_id).order('fecha', desc=True).execute()
             
             ventas = response.data or []
             total_vendido = sum(v.get('total', 0) for v in ventas)
@@ -119,13 +131,29 @@ class VentasDiaWindow(QWidget):
             show_warning_dialog(self, "Error", f"Error al cargar datos: {e}")
 
     def ver_detalle_ventas(self):
-        """Abrir ventana de detalle de ventas del día"""
-        dialog = DetalleVentasDiaDialog(self.pg_manager, date.today(), self)
+        """Abrir ventana de detalle de ventas del turno"""
+        if not self.turno_id:
+            show_warning_dialog(
+                self,
+                "Turno No Disponible",
+                "No hay un turno de caja abierto."
+            )
+            return
+        
+        dialog = DetalleVentasDiaDialog(self.pg_manager, self.turno_id, self)
         dialog.exec()
             
     def imprimir_reporte(self):
-        """Imprimir reporte de ventas del día"""
+        """Imprimir reporte de ventas del turno"""
         try:
+            if not self.turno_id:
+                show_warning_dialog(
+                    self,
+                    "Turno No Disponible",
+                    "No hay un turno de caja abierto."
+                )
+                return
+            
             from datetime import datetime
             import os
             
@@ -142,12 +170,10 @@ class VentasDiaWindow(QWidget):
                 )
                 return
             
-            # Obtener ventas del día desde Supabase
+            # Obtener ventas del turno desde Supabase
             response = self.pg_manager.client.table('ventas').select(
                 'id_venta, fecha, total, usuarios(nombre_completo)'
-            ).gte('fecha', f'{date.today()}T00:00:00').lte(
-                'fecha', f'{date.today()}T23:59:59'
-            ).order('fecha', desc=True).execute()
+            ).eq('id_turno', self.turno_id).order('fecha', desc=True).execute()
             
             ventas = response.data or []
             
@@ -208,18 +234,18 @@ class VentasDiaWindow(QWidget):
             # Guardar archivo
             fecha_str = datetime.now().strftime("%Y%m%d_%H%M%S")
             desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-            filename = os.path.join(desktop, f"ventas_dia_{fecha_str}.xlsx")
+            filename = os.path.join(desktop, f"ventas_turno_{self.turno_id}_{fecha_str}.xlsx")
             
             wb.save(filename)
             
             show_info_dialog(
                 self,
                 "Exportación completada",
-                f"El reporte de ventas del día ha sido exportado exitosamente",
+                f"El reporte de ventas del turno ha sido exportado exitosamente",
                 detail=f"Archivo guardado en:\n{filename}"
             )
             
-            logging.info(f"Ventas del día exportadas: {filename}")
+            logging.info(f"Ventas del turno {self.turno_id} exportadas: {filename}")
             
         except Exception as e:
             logging.error(f"Error exportando datos: {e}")
@@ -232,14 +258,14 @@ class VentasDiaWindow(QWidget):
 
 
 class DetalleVentasDiaDialog(QDialog):
-    """Diálogo para ver el detalle de todas las ventas del día"""
+    """Diálogo para ver el detalle de todas las ventas del turno"""
     
-    def __init__(self, pg_manager, fecha, parent=None):
+    def __init__(self, pg_manager, turno_id, parent=None):
         super().__init__(parent)
         self.pg_manager = pg_manager
-        self.fecha = fecha
+        self.turno_id = turno_id
         
-        self.setWindowTitle(f"Detalle de Ventas - {fecha.strftime('%d/%m/%Y')}")
+        self.setWindowTitle("Detalle de Ventas del Turno")
         self.setMinimumSize(900, 600)
         
         self.setup_ui()
@@ -255,7 +281,7 @@ class DetalleVentasDiaDialog(QDialog):
         layout.setSpacing(WindowsPhoneTheme.MARGIN_SMALL)
         
         # Título
-        title = SectionTitle(f"COMANDAS DEL DÍA - {self.fecha.strftime('%d/%m/%Y')}")
+        title = SectionTitle("COMANDAS DEL TURNO")
         layout.addWidget(title)
         
         # Tabla de comandas
@@ -287,19 +313,20 @@ class DetalleVentasDiaDialog(QDialog):
         layout.addLayout(btn_layout)
         
     def cargar_ventas(self):
-        """Cargar ventas del día"""
+        """Cargar ventas del turno"""
         try:
-            fecha_inicio = f"{self.fecha}T00:00:00"
-            fecha_fin = f"{self.fecha}T23:59:59"
             response = self.pg_manager.client.table('ventas').select(
                 'id_venta, fecha, total, usuarios(nombre_completo)'
-            ).gte('fecha', fecha_inicio).lte('fecha', fecha_fin).order('fecha', desc=True).execute()
+            ).eq('id_turno', self.turno_id).order('fecha', desc=True).execute()
             
             ventas = response.data or []
             
             self.tabla_ventas.setRowCount(len(ventas))
             
             for row, venta in enumerate(ventas):
+                # Establecer altura de fila
+                self.tabla_ventas.setRowHeight(row, 55)
+                
                 # ID
                 self.tabla_ventas.setItem(row, 0, QTableWidgetItem(str(venta['id_venta'])))
                 
@@ -319,10 +346,23 @@ class DetalleVentasDiaDialog(QDialog):
                 # Estado
                 self.tabla_ventas.setItem(row, 4, QTableWidgetItem("Completada"))
                 
-                # Botón ver detalle
-                btn_ver = QPushButton("Ver Detalle")
-                btn_ver.setObjectName("tileButton")
-                btn_ver.setProperty("tileColor", WindowsPhoneTheme.TILE_BLUE)
+                # Botón ver detalle con icono
+                btn_ver = QPushButton()
+                btn_ver.setIcon(qta.icon('fa5s.eye', color='white'))
+                btn_ver.setToolTip("Ver detalle de la venta")
+                btn_ver.setFixedWidth(40)
+                btn_ver.setMinimumHeight(35)
+                btn_ver.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {WindowsPhoneTheme.TILE_BLUE};
+                        color: white;
+                        border: none;
+                        border-radius: 3px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: #1976d2;
+                    }}
+                """)
                 btn_ver.clicked.connect(lambda checked, v_id=venta['id_venta']: self.ver_detalle_comanda(v_id))
                 self.tabla_ventas.setCellWidget(row, 5, btn_ver)
                 

@@ -67,11 +67,12 @@ class MainPOSWindow(QMainWindow):
     
     logout_requested = Signal()
     
-    def __init__(self, user_data, pg_manager, supabase_service):
+    def __init__(self, user_data, pg_manager, supabase_service, turno_id=None):
         super().__init__()
         self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
+        self.turno_id = turno_id  # ID del turno activo
         
         self.setWindowTitle("HTF Gimnasio - Sistema POS")
         self.setGeometry(100, 50, 1400, 900)
@@ -83,6 +84,9 @@ class MainPOSWindow(QMainWindow):
         
         # Establecer tamaño mínimo para evitar problemas de layout
         self.setMinimumSize(1000, 700)
+        
+        # Iniciar en pantalla completa
+        self.showMaximized()
         
         # Variables de estado
         self.current_tab = 0
@@ -457,6 +461,7 @@ class MainPOSWindow(QMainWindow):
                         border-color: {WindowsPhoneTheme.PRIMARY_BLUE};
                     }}
                 """)
+                self._toggle_actual_action = self._add_password_toggle(self.input_actual)
                 content_layout.addWidget(self.input_actual)
                 
                 content_layout.addSpacing(10)
@@ -479,6 +484,7 @@ class MainPOSWindow(QMainWindow):
                         border-color: {WindowsPhoneTheme.PRIMARY_BLUE};
                     }}
                 """)
+                self._toggle_nueva_action = self._add_password_toggle(self.input_nueva)
                 content_layout.addWidget(self.input_nueva)
                 
                 content_layout.addSpacing(10)
@@ -501,6 +507,7 @@ class MainPOSWindow(QMainWindow):
                         border-color: {WindowsPhoneTheme.PRIMARY_BLUE};
                     }}
                 """)
+                self._toggle_confirmar_action = self._add_password_toggle(self.input_confirmar)
                 content_layout.addWidget(self.input_confirmar)
                 
                 content_layout.addSpacing(20)
@@ -549,6 +556,41 @@ class MainPOSWindow(QMainWindow):
                 
                 content_layout.addLayout(buttons_layout)
                 layout.addWidget(content)
+
+            def _add_password_toggle(self, line_edit: QLineEdit):
+                """Agrega acción de mostrar/ocultar contraseña al QLineEdit."""
+                try:
+                    import qtawesome as qta
+                except Exception:
+                    return None
+
+                # Reservar espacio para el icono dentro del input
+                line_edit.setTextMargins(0, 0, 36, 0)
+                action = line_edit.addAction(
+                    qta.icon('fa5s.eye', color=WindowsPhoneTheme.PRIMARY_BLUE),
+                    QLineEdit.TrailingPosition
+                )
+                action.setToolTip("Mostrar contraseña")
+                action.triggered.connect(
+                    lambda checked=False, le=line_edit, act=action: self._toggle_password_visibility(le, act)
+                )
+                return action
+
+            def _toggle_password_visibility(self, line_edit: QLineEdit, action):
+                """Alterna visibilidad de contraseña para un campo."""
+                try:
+                    import qtawesome as qta
+                except Exception:
+                    return
+
+                if line_edit.echoMode() == QLineEdit.Password:
+                    line_edit.setEchoMode(QLineEdit.Normal)
+                    action.setIcon(qta.icon('fa5s.eye-slash', color=WindowsPhoneTheme.PRIMARY_BLUE))
+                    action.setToolTip("Ocultar contraseña")
+                else:
+                    line_edit.setEchoMode(QLineEdit.Password)
+                    action.setIcon(qta.icon('fa5s.eye', color=WindowsPhoneTheme.PRIMARY_BLUE))
+                    action.setToolTip("Mostrar contraseña")
             
             def cambiar(self):
                 """Validar y cambiar contraseña"""
@@ -614,7 +656,8 @@ class MainPOSWindow(QMainWindow):
             nueva_venta_widget = NuevaVentaWindow(
                 self.pg_manager, 
                 self.supabase_service, 
-                self.user_data, 
+                self.user_data,
+                self.turno_id,  # Pasar ID del turno actual
                 self
             )
             nueva_venta_widget.venta_completada.connect(self.on_venta_completada)
@@ -632,19 +675,20 @@ class MainPOSWindow(QMainWindow):
             logging.error(f"Error abriendo nueva venta: {e}")
             
     def abrir_ventas_dia(self):
-        """Abrir widget de ventas del día"""
+        """Abrir widget de ventas del turno"""
         try:
             # Actualizar título de la barra superior
-            self.top_bar.set_title("VENTAS DEL DÍA")
+            self.top_bar.set_title("VENTAS DEL TURNO")
             
             # Ocultar barra de navegación
             self.nav_bar.hide()
             
-            # Crear widget de ventas del día
+            # Crear widget de ventas del turno
             ventas_dia_widget = VentasDiaWindow(
                 self.pg_manager, 
                 self.supabase_service, 
-                self.user_data, 
+                self.user_data,
+                self.turno_id,  # Pasar ID del turno actual
                 self
             )
             ventas_dia_widget.cerrar_solicitado.connect(self.volver_a_ventas)
@@ -656,7 +700,7 @@ class MainPOSWindow(QMainWindow):
             # Forzar actualización del layout
             QTimer.singleShot(0, self.update_layout)
             
-            logging.info("Abriendo widget de ventas del día")
+            logging.info("Abriendo widget de ventas del turno")
         except Exception as e:
             logging.error(f"Error abriendo ventas del día: {e}")
             
@@ -669,6 +713,9 @@ class MainPOSWindow(QMainWindow):
             # Ocultar barra de navegación
             self.nav_bar.hide()
             
+            # Verificar desde qué pestaña se está abriendo
+            current_index = self.stacked_widget.currentIndex()
+            
             # Crear widget de historial
             historial_widget = HistorialVentasWindow(
                 self.pg_manager, 
@@ -676,7 +723,13 @@ class MainPOSWindow(QMainWindow):
                 self.user_data, 
                 self
             )
-            historial_widget.cerrar_solicitado.connect(self.volver_a_ventas)
+            
+            # Conectar señal según la vista actual
+            # Índice 0 = Ventas, Índice 3 = Administración
+            if current_index == 3:
+                historial_widget.cerrar_solicitado.connect(self.volver_a_administracion)
+            else:
+                historial_widget.cerrar_solicitado.connect(self.volver_a_ventas)
             
             # Agregar al stack y cambiar a esa vista
             self.stacked_widget.addWidget(historial_widget)
@@ -1533,6 +1586,52 @@ class MainPOSWindow(QMainWindow):
     def closeEvent(self, event):
         """Evento al cerrar la ventana principal"""
         try:
+            # Verificar si hay turno abierto
+            if self.turno_id and self.pg_manager:
+                try:
+                    response = self.pg_manager.client.table('turnos_caja').select(
+                        'id_turno, fecha_apertura, monto_inicial, cerrado'
+                    ).eq('id_turno', self.turno_id).execute()
+                    
+                    if response.data and len(response.data) > 0:
+                        turno = response.data[0]
+                        if not turno.get('cerrado'):
+                            # Mostrar advertencia de turno abierto
+                            from ui.components import show_confirmation_dialog
+                            from datetime import datetime
+                            
+                            fecha_apertura = turno.get('fecha_apertura', '')
+                            if isinstance(fecha_apertura, str):
+                                try:
+                                    fecha_obj = datetime.fromisoformat(fecha_apertura.replace('Z', '+00:00'))
+                                    fecha_apertura = fecha_obj.strftime('%d/%m/%Y %H:%M')
+                                except:
+                                    pass
+                            
+                            # Preguntar si desea cerrar de todas formas
+                            respuesta = show_confirmation_dialog(
+                                self,
+                                "Turno Abierto",
+                                f"⚠️ ADVERTENCIA: Tienes un turno abierto\n\n"
+                                f"Fecha apertura: {fecha_apertura}\n"
+                                f"Monto inicial: ${float(turno.get('monto_inicial', 0)):.2f}\n\n"
+                                f"Recuerda cerrar el turno antes de finalizar el día.",
+                                detail="¿Deseas cerrar el POS de todas formas?",
+                                confirm_text="Cerrar de todas formas",
+                                cancel_text="Cancelar"
+                            )
+                            
+                            # Si el usuario cancela, ignorar el evento de cierre
+                            if not respuesta:
+                                event.ignore()
+                                return
+                                
+                except Exception as e:
+                    logging.error(f"Error verificando turno al cerrar: {e}")
+            
+            # Si llegamos aquí, aceptamos el cierre
+            event.accept()
+            
             # Detener monitor de entradas
             if self.monitor_entradas:
                 self.monitor_entradas.detener()
@@ -1549,5 +1648,4 @@ class MainPOSWindow(QMainWindow):
             
         except Exception as e:
             logging.error(f"Error en closeEvent: {e}")
-        finally:
-            super().closeEvent(event)
+            event.accept()

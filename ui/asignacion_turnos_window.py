@@ -29,6 +29,7 @@ from ui.components import (
     show_success_dialog,
     show_confirmation_dialog,
     TouchMoneyInput,
+    aplicar_estilo_fecha
 )
 
 
@@ -129,8 +130,8 @@ class AsignacionTurnosWindow(QWidget):
         self.fecha_turno = QDateEdit()
         self.fecha_turno.setCalendarPopup(True)
         self.fecha_turno.setDate(QDate.currentDate())
+        aplicar_estilo_fecha(self.fecha_turno)
         self.fecha_turno.setMinimumHeight(40)
-        self.fecha_turno.setStyleSheet(input_style)
         self.fecha_turno.dateChanged.connect(self.actualizar_turnos_fecha)
         grid.addWidget(self.fecha_turno, row, 1)
         row += 1
@@ -235,23 +236,8 @@ class AsignacionTurnosWindow(QWidget):
         self.fecha_filtro = QDateEdit()
         self.fecha_filtro.setCalendarPopup(True)
         self.fecha_filtro.setDate(QDate.currentDate())
+        aplicar_estilo_fecha(self.fecha_filtro)
         self.fecha_filtro.setMinimumHeight(40)
-        
-        # Estilo consistente
-        date_style = f"""
-            QDateEdit {{
-                padding: 8px;
-                border: 2px solid #e5e7eb;
-                border-radius: 4px;
-                font-family: {WindowsPhoneTheme.FONT_FAMILY};
-                font-size: {WindowsPhoneTheme.FONT_SIZE_NORMAL}px;
-                background-color: white;
-            }}
-            QDateEdit:focus {{
-                border-color: {WindowsPhoneTheme.TILE_BLUE};
-            }}
-        """
-        self.fecha_filtro.setStyleSheet(date_style)
         self.fecha_filtro.dateChanged.connect(self.cargar_turnos_asignados)
         filter_layout.addWidget(self.fecha_filtro)
         
@@ -403,20 +389,49 @@ class AsignacionTurnosWindow(QWidget):
         self.tabla_turnos.setRowCount(len(self.turnos_asignados))
         
         for row_idx, turno in enumerate(self.turnos_asignados):
-            # Fecha
-            fecha = turno['fecha_apertura'].strftime("%d/%m/%Y") if turno['fecha_apertura'] else ""
+            self.tabla_turnos.setRowHeight(row_idx, 55)
+            
+            # Fecha - convertir de string si es necesario
+            if turno['fecha_apertura']:
+                try:
+                    if isinstance(turno['fecha_apertura'], str):
+                        fecha_obj = datetime.fromisoformat(turno['fecha_apertura'].replace('Z', '+00:00'))
+                        fecha = fecha_obj.strftime("%d/%m/%Y")
+                    else:
+                        fecha = turno['fecha_apertura'].strftime("%d/%m/%Y")
+                except:
+                    fecha = str(turno['fecha_apertura'])
+            else:
+                fecha = ""
             self.tabla_turnos.setItem(row_idx, 0, QTableWidgetItem(fecha))
             
             # Empleado
             self.tabla_turnos.setItem(row_idx, 1, QTableWidgetItem(turno['nombre_completo']))
             
-            # Hora inicio
-            hora_inicio = turno['fecha_apertura'].strftime("%H:%M") if turno['fecha_apertura'] else ""
+            # Hora inicio - convertir de string si es necesario
+            if turno['fecha_apertura']:
+                try:
+                    if isinstance(turno['fecha_apertura'], str):
+                        fecha_obj = datetime.fromisoformat(turno['fecha_apertura'].replace('Z', '+00:00'))
+                        hora_inicio = fecha_obj.strftime("%H:%M")
+                    else:
+                        hora_inicio = turno['fecha_apertura'].strftime("%H:%M")
+                except:
+                    hora_inicio = str(turno['fecha_apertura'])
+            else:
+                hora_inicio = ""
             self.tabla_turnos.setItem(row_idx, 2, QTableWidgetItem(hora_inicio))
             
-            # Hora fin (si está cerrado)
+            # Hora fin (si está cerrado) - convertir de string si es necesario
             if turno['fecha_cierre']:
-                hora_fin = turno['fecha_cierre'].strftime("%H:%M")
+                try:
+                    if isinstance(turno['fecha_cierre'], str):
+                        fecha_obj = datetime.fromisoformat(turno['fecha_cierre'].replace('Z', '+00:00'))
+                        hora_fin = fecha_obj.strftime("%H:%M")
+                    else:
+                        hora_fin = turno['fecha_cierre'].strftime("%H:%M")
+                except:
+                    hora_fin = str(turno['fecha_cierre'])
             else:
                 hora_fin = "-"
             self.tabla_turnos.setItem(row_idx, 3, QTableWidgetItem(hora_fin))
@@ -513,6 +528,7 @@ class AsignacionTurnosWindow(QWidget):
                 'id_usuario': id_usuario,
                 'fecha_apertura': str(fecha_apertura),
                 'monto_inicial': monto_inicial,
+                'monto_esperado': monto_inicial,  # Inicialmente el esperado es igual al inicial
                 'notas_apertura': f"Turno {turno_nombre}",
                 'cerrado': False
             }

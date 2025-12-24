@@ -24,7 +24,8 @@ from ui.components import (
     SearchBar,
     show_info_dialog,
     show_warning_dialog,
-    show_error_dialog
+    show_error_dialog,
+    aplicar_estilo_fecha
 )
 
 
@@ -158,9 +159,8 @@ class HistorialMovimientosWindow(QWidget):
         self.fecha_inicio = QDateEdit()
         self.fecha_inicio.setDate(QDate.currentDate().addMonths(-1))
         self.fecha_inicio.setCalendarPopup(True)
-        self.fecha_inicio.setDisplayFormat("dd/MM/yyyy")
+        aplicar_estilo_fecha(self.fecha_inicio)
         self.fecha_inicio.setMinimumHeight(40)
-        self.fecha_inicio.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
         self.fecha_inicio.dateChanged.connect(self.aplicar_filtros)
         fecha_inicio_layout.addWidget(self.fecha_inicio)
         
@@ -178,9 +178,8 @@ class HistorialMovimientosWindow(QWidget):
         self.fecha_fin = QDateEdit()
         self.fecha_fin.setDate(QDate.currentDate())
         self.fecha_fin.setCalendarPopup(True)
-        self.fecha_fin.setDisplayFormat("dd/MM/yyyy")
+        aplicar_estilo_fecha(self.fecha_fin)
         self.fecha_fin.setMinimumHeight(40)
-        self.fecha_fin.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
         self.fecha_fin.dateChanged.connect(self.aplicar_filtros)
         fecha_fin_layout.addWidget(self.fecha_fin)
         
@@ -205,10 +204,10 @@ class HistorialMovimientosWindow(QWidget):
         
         # Tabla de movimientos
         self.movimientos_table = QTableWidget()
-        self.movimientos_table.setColumnCount(10)
+        self.movimientos_table.setColumnCount(9)
         self.movimientos_table.setHorizontalHeaderLabels([
             "Fecha", "Tipo", "Código", "Producto", "Cantidad", 
-            "Stock Ant.", "Stock Nuevo", "Motivo", "Usuario", "ID Venta"
+            "Stock Ant.", "Stock Nuevo", "Motivo", "Usuario"
         ])
         
         # Configurar header
@@ -222,13 +221,13 @@ class HistorialMovimientosWindow(QWidget):
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(7, QHeaderView.Stretch)
         header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)
         
         # Estilo de la tabla
         self.movimientos_table.setAlternatingRowColors(True)
         self.movimientos_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.movimientos_table.setSelectionMode(QTableWidget.SingleSelection)
         self.movimientos_table.verticalHeader().setVisible(False)
+        self.movimientos_table.setEditTriggers(QTableWidget.NoEditTriggers)
         
         table_layout.addWidget(self.movimientos_table)
         return table_panel
@@ -440,12 +439,6 @@ class HistorialMovimientosWindow(QWidget):
                 item_usuario = QTableWidgetItem(mov['nombre_usuario'])
                 item_usuario.setTextAlignment(Qt.AlignCenter)
                 self.movimientos_table.setItem(row, 8, item_usuario)
-                
-                # ID Venta
-                id_venta_str = str(mov['id_venta']) if mov['id_venta'] else '-'
-                item_venta = QTableWidgetItem(id_venta_str)
-                item_venta.setTextAlignment(Qt.AlignCenter)
-                self.movimientos_table.setItem(row, 9, item_venta)
             
             # Actualizar información
             total_movimientos = len(movimientos)
@@ -598,7 +591,11 @@ class HistorialMovimientosWindow(QWidget):
     
     def __del__(self):
         """Destructor para limpiar el thread"""
-        if hasattr(self, 'loader_thread') and self.loader_thread:
-            if self.loader_thread.isRunning():
-                self.loader_thread.quit()
-                self.loader_thread.wait(1000)
+        try:
+            if hasattr(self, 'loader_thread') and self.loader_thread:
+                if self.loader_thread.isRunning():
+                    self.loader_thread.quit()
+                    self.loader_thread.wait(1000)
+        except (RuntimeError, AttributeError):
+            # El thread ya fue eliminado por C++
+            pass

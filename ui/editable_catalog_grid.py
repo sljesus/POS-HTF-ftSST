@@ -5,13 +5,13 @@ Permite editar información de suplementos y productos varios
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QHeaderView, QPushButton, QTabWidget, QSizePolicy, QMessageBox
+    QHeaderView, QPushButton, QTabWidget, QSizePolicy, QMessageBox, QLineEdit, QComboBox
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QBrush
 import logging
 
-from ui.components import WindowsPhoneTheme, TileButton, StyledLabel, show_info_dialog, show_warning_dialog, show_error_dialog, create_page_layout, ContentPanel
+from ui.components import WindowsPhoneTheme, TileButton, StyledLabel, show_info_dialog, show_warning_dialog, show_error_dialog, create_page_layout, ContentPanel, SearchBar
 
 
 class EditableCatalogGrid(QWidget):
@@ -72,7 +72,50 @@ class EditableCatalogGrid(QWidget):
         # Tab Productos Varios
         self.tab_varios = QWidget()
         tab_varios_layout = QVBoxLayout(self.tab_varios)
-        tab_varios_layout.setContentsMargins(0, 0, 0, 0)
+        tab_varios_layout.setContentsMargins(10, 10, 10, 10)
+        tab_varios_layout.setSpacing(10)
+        
+        # Panel de búsqueda para productos varios
+        search_varios_panel = ContentPanel()
+        search_varios_layout = QHBoxLayout(search_varios_panel)
+        search_varios_layout.setSpacing(10)
+        
+        search_varios_layout.addWidget(StyledLabel("Buscar:", bold=True))
+        self.search_varios = SearchBar("Buscar por código, nombre o descripción...")
+        self.search_varios.connect_search(self.filtrar_productos_varios)
+        search_varios_layout.addWidget(self.search_varios, stretch=1)
+        
+        search_varios_layout.addWidget(StyledLabel("Categoría:", bold=True))
+        self.combo_categoria_varios = QComboBox()
+        self.combo_categoria_varios.setMinimumWidth(150)
+        self.combo_categoria_varios.addItem("Todas")
+        self.combo_categoria_varios.currentTextChanged.connect(self.filtrar_productos_varios)
+        self.combo_categoria_varios.setStyleSheet(f"""
+            QComboBox {{
+                padding: 6px;
+                border: 2px solid {WindowsPhoneTheme.BORDER_COLOR};
+                border-radius: 4px;
+                background-color: white;
+            }}
+        """)
+        search_varios_layout.addWidget(self.combo_categoria_varios)
+        
+        search_varios_layout.addWidget(StyledLabel("Estado:", bold=True))
+        self.combo_activo_varios = QComboBox()
+        self.combo_activo_varios.addItems(["Todos", "Activos", "Inactivos"])
+        self.combo_activo_varios.currentTextChanged.connect(self.filtrar_productos_varios)
+        self.combo_activo_varios.setStyleSheet(f"""
+            QComboBox {{
+                padding: 6px;
+                border: 2px solid {WindowsPhoneTheme.BORDER_COLOR};
+                border-radius: 4px;
+                background-color: white;
+            }}
+        """)
+        search_varios_layout.addWidget(self.combo_activo_varios)
+        
+        tab_varios_layout.addWidget(search_varios_panel)
+        
         self.tabla_varios = self.crear_tabla_productos_varios()
         tab_varios_layout.addWidget(self.tabla_varios)
         self.tab_widget.addTab(self.tab_varios, "Productos Varios")
@@ -80,7 +123,50 @@ class EditableCatalogGrid(QWidget):
         # Tab Suplementos
         self.tab_suplementos = QWidget()
         tab_suplementos_layout = QVBoxLayout(self.tab_suplementos)
-        tab_suplementos_layout.setContentsMargins(0, 0, 0, 0)
+        tab_suplementos_layout.setContentsMargins(10, 10, 10, 10)
+        tab_suplementos_layout.setSpacing(10)
+        
+        # Panel de búsqueda para suplementos
+        search_suplementos_panel = ContentPanel()
+        search_suplementos_layout = QHBoxLayout(search_suplementos_panel)
+        search_suplementos_layout.setSpacing(10)
+        
+        search_suplementos_layout.addWidget(StyledLabel("Buscar:", bold=True))
+        self.search_suplementos = SearchBar("Buscar por código, nombre o marca...")
+        self.search_suplementos.connect_search(self.filtrar_suplementos)
+        search_suplementos_layout.addWidget(self.search_suplementos, stretch=1)
+        
+        search_suplementos_layout.addWidget(StyledLabel("Tipo:", bold=True))
+        self.combo_tipo_suplemento = QComboBox()
+        self.combo_tipo_suplemento.setMinimumWidth(150)
+        self.combo_tipo_suplemento.addItem("Todos")
+        self.combo_tipo_suplemento.currentTextChanged.connect(self.filtrar_suplementos)
+        self.combo_tipo_suplemento.setStyleSheet(f"""
+            QComboBox {{
+                padding: 6px;
+                border: 2px solid {WindowsPhoneTheme.BORDER_COLOR};
+                border-radius: 4px;
+                background-color: white;
+            }}
+        """)
+        search_suplementos_layout.addWidget(self.combo_tipo_suplemento)
+        
+        search_suplementos_layout.addWidget(StyledLabel("Estado:", bold=True))
+        self.combo_activo_suplementos = QComboBox()
+        self.combo_activo_suplementos.addItems(["Todos", "Activos", "Inactivos"])
+        self.combo_activo_suplementos.currentTextChanged.connect(self.filtrar_suplementos)
+        self.combo_activo_suplementos.setStyleSheet(f"""
+            QComboBox {{
+                padding: 6px;
+                border: 2px solid {WindowsPhoneTheme.BORDER_COLOR};
+                border-radius: 4px;
+                background-color: white;
+            }}
+        """)
+        search_suplementos_layout.addWidget(self.combo_activo_suplementos)
+        
+        tab_suplementos_layout.addWidget(search_suplementos_panel)
+        
         self.tabla_suplementos = self.crear_tabla_suplementos()
         tab_suplementos_layout.addWidget(self.tabla_suplementos)
         self.tab_widget.addTab(self.tab_suplementos, "Suplementos")
@@ -247,6 +333,9 @@ class EditableCatalogGrid(QWidget):
             response_suplementos = self.pg_manager.client.table('ca_suplementos').select('*').execute()
             self.suplementos = response_suplementos.data or []
             
+            # Actualizar combos de filtros
+            self.actualizar_combos_filtros()
+            
             # Poblar tablas
             self.poblar_tabla_productos_varios()
             self.poblar_tabla_suplementos()
@@ -259,6 +348,32 @@ class EditableCatalogGrid(QWidget):
         except Exception as e:
             logging.error(f"Error cargando catálogo: {e}")
             show_error_dialog(self, "Error al cargar", "No se pudo cargar el catálogo de productos", detail=str(e))
+    
+    def actualizar_combos_filtros(self):
+        """Actualizar los combos de filtros con valores únicos"""
+        # Categorías únicas de productos varios
+        categorias = set()
+        for producto in self.productos_varios:
+            cat = producto.get('categoria')
+            if cat:
+                categorias.add(cat)
+        
+        self.combo_categoria_varios.clear()
+        self.combo_categoria_varios.addItem("Todas")
+        for cat in sorted(categorias):
+            self.combo_categoria_varios.addItem(cat)
+        
+        # Tipos únicos de suplementos
+        tipos = set()
+        for suplemento in self.suplementos:
+            tipo = suplemento.get('tipo')
+            if tipo:
+                tipos.add(tipo)
+        
+        self.combo_tipo_suplemento.clear()
+        self.combo_tipo_suplemento.addItem("Todos")
+        for tipo in sorted(tipos):
+            self.combo_tipo_suplemento.addItem(tipo)
     
     def poblar_tabla_productos_varios(self):
         """Poblar tabla de productos varios"""
@@ -439,3 +554,71 @@ class EditableCatalogGrid(QWidget):
         if reply == QMessageBox.Yes:
             self.cambios_pendientes = {}
             self.cargar_datos()
+    
+    def filtrar_productos_varios(self):
+        """Filtrar productos varios por búsqueda, categoría y estado"""
+        texto_busqueda = self.search_varios.text().lower()
+        categoria_filtro = self.combo_categoria_varios.currentText()
+        estado_filtro = self.combo_activo_varios.currentText()
+        
+        for row in range(self.tabla_varios.rowCount()):
+            mostrar_fila = True
+            
+            # Filtro de búsqueda
+            if texto_busqueda:
+                codigo = self.tabla_varios.item(row, 0).text().lower()
+                nombre = self.tabla_varios.item(row, 1).text().lower()
+                descripcion = self.tabla_varios.item(row, 2).text().lower() if self.tabla_varios.item(row, 2) else ""
+                
+                if not (texto_busqueda in codigo or texto_busqueda in nombre or texto_busqueda in descripcion):
+                    mostrar_fila = False
+            
+            # Filtro de categoría
+            if mostrar_fila and categoria_filtro != "Todas":
+                categoria = self.tabla_varios.item(row, 4).text()
+                if categoria != categoria_filtro:
+                    mostrar_fila = False
+            
+            # Filtro de estado
+            if mostrar_fila and estado_filtro != "Todos":
+                activo = self.tabla_varios.item(row, 6).text()
+                if estado_filtro == "Activos" and activo != "Sí":
+                    mostrar_fila = False
+                elif estado_filtro == "Inactivos" and activo != "No":
+                    mostrar_fila = False
+            
+            self.tabla_varios.setRowHidden(row, not mostrar_fila)
+    
+    def filtrar_suplementos(self):
+        """Filtrar suplementos por búsqueda, tipo y estado"""
+        texto_busqueda = self.search_suplementos.text().lower()
+        tipo_filtro = self.combo_tipo_suplemento.currentText()
+        estado_filtro = self.combo_activo_suplementos.currentText()
+        
+        for row in range(self.tabla_suplementos.rowCount()):
+            mostrar_fila = True
+            
+            # Filtro de búsqueda
+            if texto_busqueda:
+                codigo = self.tabla_suplementos.item(row, 0).text().lower()
+                nombre = self.tabla_suplementos.item(row, 1).text().lower()
+                marca = self.tabla_suplementos.item(row, 2).text().lower() if self.tabla_suplementos.item(row, 2) else ""
+                
+                if not (texto_busqueda in codigo or texto_busqueda in nombre or texto_busqueda in marca):
+                    mostrar_fila = False
+            
+            # Filtro de tipo
+            if mostrar_fila and tipo_filtro != "Todos":
+                tipo = self.tabla_suplementos.item(row, 3).text()
+                if tipo != tipo_filtro:
+                    mostrar_fila = False
+            
+            # Filtro de estado
+            if mostrar_fila and estado_filtro != "Todos":
+                activo = self.tabla_suplementos.item(row, 6).text()
+                if estado_filtro == "Activos" and activo != "Sí":
+                    mostrar_fila = False
+                elif estado_filtro == "Inactivos" and activo != "No":
+                    mostrar_fila = False
+            
+            self.tabla_suplementos.setRowHidden(row, not mostrar_fila)

@@ -26,7 +26,8 @@ from ui.components import (
     show_info_dialog,
     show_warning_dialog,
     show_error_dialog,
-    show_success_dialog
+    show_success_dialog,
+    aplicar_estilo_fecha
 )
 
 
@@ -173,8 +174,8 @@ class HistorialTurnosWindow(QWidget):
         self.fecha_inicio = QDateEdit()
         self.fecha_inicio.setCalendarPopup(True)
         self.fecha_inicio.setDate(QDate.currentDate().addDays(-30))
+        aplicar_estilo_fecha(self.fecha_inicio)
         self.fecha_inicio.setMinimumHeight(40)
-        self.fecha_inicio.setStyleSheet(input_style)
         self.fecha_inicio.dateChanged.connect(self.aplicar_filtros)
         fecha_inicio_layout.addWidget(self.fecha_inicio)
         
@@ -192,8 +193,8 @@ class HistorialTurnosWindow(QWidget):
         self.fecha_fin = QDateEdit()
         self.fecha_fin.setCalendarPopup(True)
         self.fecha_fin.setDate(QDate.currentDate())
+        aplicar_estilo_fecha(self.fecha_fin)
         self.fecha_fin.setMinimumHeight(40)
-        self.fecha_fin.setStyleSheet(input_style)
         self.fecha_fin.dateChanged.connect(self.aplicar_filtros)
         fecha_fin_layout.addWidget(self.fecha_fin)
         
@@ -303,10 +304,19 @@ class HistorialTurnosWindow(QWidget):
         """Cargar turnos desde la base de datos"""
         try:
             response = self.pg_manager.client.table('turnos_caja').select(
-                '*'
+                '*, usuarios(nombre_completo)'
             ).order('fecha_apertura', desc=True).execute()
             
-            self.turnos_data = response.data
+            # Procesar datos para tener nombre_usuario disponible
+            self.turnos_data = []
+            for turno in (response.data or []):
+                # Extraer nombre del usuario del objeto anidado
+                if 'usuarios' in turno and turno['usuarios']:
+                    turno['nombre_usuario'] = turno['usuarios'].get('nombre_completo', 'N/A')
+                else:
+                    turno['nombre_usuario'] = 'N/A'
+                self.turnos_data.append(turno)
+            
             self.aplicar_filtros()
                 
         except Exception as e:
@@ -335,9 +345,18 @@ class HistorialTurnosWindow(QWidget):
                 continue
             
             # Filtro de fechas
-            fecha_apertura = turno['fecha_apertura'].date() if turno['fecha_apertura'] else None
-            if fecha_apertura:
-                if fecha_apertura < fecha_inicio or fecha_apertura > fecha_fin:
+            if turno['fecha_apertura']:
+                try:
+                    # Convertir string a datetime si es necesario
+                    if isinstance(turno['fecha_apertura'], str):
+                        fecha_apertura = datetime.fromisoformat(turno['fecha_apertura'].replace('Z', '+00:00')).date()
+                    else:
+                        fecha_apertura = turno['fecha_apertura'].date()
+                    
+                    if fecha_apertura < fecha_inicio or fecha_apertura > fecha_fin:
+                        continue
+                except Exception as e:
+                    logging.error(f"Error procesando fecha de turno: {e}")
                     continue
             
             self.turnos_filtrados.append(turno)
@@ -357,11 +376,31 @@ class HistorialTurnosWindow(QWidget):
             self.tabla_turnos.setItem(row_idx, 1, QTableWidgetItem(turno['nombre_usuario']))
             
             # Fecha apertura
-            fecha_apertura = turno['fecha_apertura'].strftime("%d/%m/%Y %H:%M") if turno['fecha_apertura'] else ""
+            if turno['fecha_apertura']:
+                try:
+                    if isinstance(turno['fecha_apertura'], str):
+                        fecha_obj = datetime.fromisoformat(turno['fecha_apertura'].replace('Z', '+00:00'))
+                        fecha_apertura = fecha_obj.strftime("%d/%m/%Y %H:%M")
+                    else:
+                        fecha_apertura = turno['fecha_apertura'].strftime("%d/%m/%Y %H:%M")
+                except:
+                    fecha_apertura = str(turno['fecha_apertura'])
+            else:
+                fecha_apertura = ""
             self.tabla_turnos.setItem(row_idx, 2, QTableWidgetItem(fecha_apertura))
             
             # Fecha cierre
-            fecha_cierre = turno['fecha_cierre'].strftime("%d/%m/%Y %H:%M") if turno['fecha_cierre'] else "ABIERTO"
+            if turno['fecha_cierre']:
+                try:
+                    if isinstance(turno['fecha_cierre'], str):
+                        fecha_obj = datetime.fromisoformat(turno['fecha_cierre'].replace('Z', '+00:00'))
+                        fecha_cierre = fecha_obj.strftime("%d/%m/%Y %H:%M")
+                    else:
+                        fecha_cierre = turno['fecha_cierre'].strftime("%d/%m/%Y %H:%M")
+                except:
+                    fecha_cierre = str(turno['fecha_cierre'])
+            else:
+                fecha_cierre = "ABIERTO"
             item_cierre = QTableWidgetItem(fecha_cierre)
             if not turno['cerrado']:
                 item_cierre.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL, QFont.Bold))
@@ -427,12 +466,36 @@ class HistorialTurnosWindow(QWidget):
         detalles += f"Usuario: {turno['nombre_usuario']}\n\n"
         
         detalles += "--- APERTURA ---\n"
-        detalles += f"Fecha: {turno['fecha_apertura'].strftime('%d/%m/%Y %H:%M')}\n"
+        # Convertir fecha_apertura si es string
+        if turno['fecha_apertura']:
+            try:
+                if isinstance(turno['fecha_apertura'], str):
+                    fecha_obj = datetime.fromisoformat(turno['fecha_apertura'].replace('Z', '+00:00'))
+                    fecha_apertura_str = fecha_obj.strftime('%d/%m/%Y %H:%M')
+                else:
+                    fecha_apertura_str = turno['fecha_apertura'].strftime('%d/%m/%Y %H:%M')
+            except:
+                fecha_apertura_str = str(turno['fecha_apertura'])
+        else:
+            fecha_apertura_str = "N/A"
+        detalles += f"Fecha: {fecha_apertura_str}\n"
         detalles += f"Monto inicial: ${float(turno['monto_inicial']):.2f}\n\n"
         
         if turno['cerrado']:
             detalles += "--- CIERRE ---\n"
-            detalles += f"Fecha: {turno['fecha_cierre'].strftime('%d/%m/%Y %H:%M')}\n"
+            # Convertir fecha_cierre si es string
+            if turno['fecha_cierre']:
+                try:
+                    if isinstance(turno['fecha_cierre'], str):
+                        fecha_obj = datetime.fromisoformat(turno['fecha_cierre'].replace('Z', '+00:00'))
+                        fecha_cierre_str = fecha_obj.strftime('%d/%m/%Y %H:%M')
+                    else:
+                        fecha_cierre_str = turno['fecha_cierre'].strftime('%d/%m/%Y %H:%M')
+                except:
+                    fecha_cierre_str = str(turno['fecha_cierre'])
+            else:
+                fecha_cierre_str = "N/A"
+            detalles += f"Fecha: {fecha_cierre_str}\n"
             detalles += f"Ventas en efectivo: ${float(turno['total_ventas_efectivo']):.2f}\n"
             detalles += f"Monto esperado: ${float(turno['monto_esperado']):.2f}\n"
             detalles += f"Monto real: ${float(turno['monto_real_cierre']):.2f}\n"

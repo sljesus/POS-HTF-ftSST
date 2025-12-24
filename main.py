@@ -30,9 +30,11 @@ if sys.platform == 'win32':
 try:
     from ui.login_window_pyside import LoginWindow
     from ui.main_pos_window import MainPOSWindow
+    from ui.abrir_turno_dialog import AbrirTurnoDialog
     from database.postgres_manager import PostgresManager
     from services.supabase_service import SupabaseService
     from utils.config import Config
+    from ui.components import show_warning_dialog, show_confirmation_dialog
 except ImportError as e:
     logging.error(f"Error importando módulos: {e}")
     # Mostrar error al usuario si es GUI
@@ -75,6 +77,7 @@ class POSApplication:
             # Variable para usuario actual
             self.current_user = None
             self.main_window = None
+            self.turno_id = None  # ID del turno activo
             
             # Mostrar ventana de login
             self.show_login()
@@ -110,11 +113,49 @@ class POSApplication:
             # Cerrar ventana de login
             self.login_window.close()
             
+            # Verificar si ya tiene un turno abierto
+            turno_abierto = self.verificar_turno_abierto()
+            
+            if not turno_abierto:
+                # Abrir diálogo para iniciar turno
+                dialog = AbrirTurnoDialog(self.postgres_manager, self.current_user)
+                if dialog.exec():
+                    self.turno_id = dialog.get_turno_id()
+                    logging.info(f"Turno {self.turno_id} abierto para usuario {self.current_user['nombre_completo']}")
+                else:
+                    # Usuario canceló la apertura del turno
+                    logging.warning("Usuario canceló la apertura del turno, cerrando sesión")
+                    self.current_user = None
+                    self.show_login()
+                    return
+            else:
+                # Ya tiene un turno abierto, usar ese
+                self.turno_id = turno_abierto['id_turno']
+                logging.info(f"Usuario tiene turno {self.turno_id} ya abierto")
+            
             # Mostrar ventana principal
             self.show_main_window()
             
         except Exception as e:
             logging.error(f"Error al procesar login exitoso: {e}")
+    
+    def verificar_turno_abierto(self):
+        """Verificar si el usuario tiene un turno abierto"""
+        try:
+            if not self.postgres_manager:
+                return None
+                
+            response = self.postgres_manager.client.table('turnos_caja').select(
+                'id_turno, fecha_apertura, monto_inicial'
+            ).eq('id_usuario', self.current_user['id_usuario']).eq('cerrado', False).execute()
+            
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error verificando turno abierto: {e}")
+            return None
     
     def show_main_window(self):
         """Mostrar ventana principal del POS"""
@@ -122,7 +163,8 @@ class POSApplication:
             self.main_window = MainPOSWindow(
                 self.current_user,
                 self.postgres_manager,
-                self.supabase_service
+                self.supabase_service,
+                self.turno_id  # Pasar ID del turno activo
             )
             self.main_window.logout_requested.connect(self.on_logout)
             self.main_window.show()
@@ -133,17 +175,53 @@ class POSApplication:
     def on_logout(self):
         """Manejar cierre de sesión"""
         try:
+            # Verificar si hay turno abierto
+            if self.turno_id:
+                turno_info = self.verificar_estado_turno()
+                if turno_info and not turno_info.get('cerrado'):
+                    # Mostrar advertencia
+                    if self.main_window:
+                        show_warning_dialog(
+                            self.main_window,
+                            "Turno Abierto",
+                            f"ADVERTENCIA: Tienes un turno abierto\n\n"
+                            f"Fecha apertura: {turno_info.get('fecha_apertura', 'N/A')}\n"
+                            f"Monto inicial: ${float(turno_info.get('monto_inicial', 0)):.2f}\n\n"
+                            f"Recuerda cerrar el turno antes de finalizar el día."
+                        )
+            
             # Cerrar ventana principal
             if self.main_window:
                 self.main_window.close()
                 self.main_window = None
             
-            # Volver a mostrar login
+            # Limpiar turno y usuario
+            self.turno_id = None
             self.current_user = None
+            
+            # Volver a mostrar login
             self.show_login()
             
         except Exception as e:
             logging.error(f"Error al cerrar sesión: {e}")
+    
+    def verificar_estado_turno(self):
+        """Verificar el estado actual del turno"""
+        try:
+            if not self.postgres_manager or not self.turno_id:
+                return None
+                
+            response = self.postgres_manager.client.table('turnos_caja').select(
+                'id_turno, fecha_apertura, monto_inicial, cerrado'
+            ).eq('id_turno', self.turno_id).execute()
+            
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error verificando estado del turno: {e}")
+            return None
     
     def run(self):
         """Ejecutar la aplicación"""

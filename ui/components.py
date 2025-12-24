@@ -1310,3 +1310,101 @@ class TouchMoneyInput(QLineEdit):
         """Formatear valor al perder el foco"""
         current = self.value()
         self.setValue(current)
+
+
+def aplicar_estilo_fecha(date_edit):
+    """Aplicar estilo moderno y atractivo a QDateEdit y su calendario"""
+    date_edit.setDisplayFormat("dd/MM/yyyy")
+    date_edit.setStyleSheet(f"""
+        QDateEdit {{
+            background-color: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            padding: 8px;
+            color: #333;
+        }}
+        QDateEdit:hover {{
+            border-color: {WindowsPhoneTheme.TILE_BLUE};
+        }}
+        QDateEdit:focus {{
+            border-color: {WindowsPhoneTheme.TILE_BLUE};
+            background-color: #f8f9fa;
+        }}
+        QDateEdit::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 30px;
+            border-left: 1px solid #e0e0e0;
+            border-top-right-radius: 5px;
+            border-bottom-right-radius: 5px;
+            background-color: {WindowsPhoneTheme.TILE_BLUE};
+        }}
+        QDateEdit::down-arrow {{
+            image: none;
+            border: none;
+            width: 0px;
+            height: 0px;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid white;
+            margin-right: 10px;
+        }}
+        QCalendarWidget {{
+            background-color: white;
+            border: 2px solid {WindowsPhoneTheme.TILE_BLUE};
+            border-radius: 8px;
+        }}
+        QCalendarWidget QToolButton {{
+            background-color: {WindowsPhoneTheme.TILE_BLUE};
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+            padding: 8px;
+            margin: 2px;
+            min-height: 35px;
+        }}
+        QCalendarWidget QToolButton:hover {{
+            background-color: {WindowsPhoneTheme.TILE_TEAL};
+        }}
+        QCalendarWidget QToolButton:pressed {{
+            background-color: #1565c0;
+        }}
+        QCalendarWidget QMenu {{
+            background-color: white;
+            border: 1px solid #e0e0e0;
+        }}
+        QCalendarWidget QSpinBox {{
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 3px;
+            padding: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            color: {WindowsPhoneTheme.TILE_BLUE};
+            min-width: 80px;
+        }}
+        QCalendarWidget QWidget#qt_calendar_navigationbar {{
+            background-color: {WindowsPhoneTheme.TILE_BLUE};
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            padding: 5px;
+        }}
+        QCalendarWidget QAbstractItemView {{
+            background-color: white;
+            selection-background-color: {WindowsPhoneTheme.TILE_BLUE};
+            selection-color: white;
+            border: none;
+            font-size: 13px;
+        }}
+        QCalendarWidget QAbstractItemView:enabled {{
+            color: #333;
+        }}
+        QCalendarWidget QAbstractItemView:disabled {{
+            color: #bdbdbd;
+        }}
+        QCalendarWidget QWidget {{
+            alternate-background-color: #f5f5f5;
+        }}
+    """)

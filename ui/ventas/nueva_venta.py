@@ -16,6 +16,7 @@ from PySide6.QtGui import QFont, QCursor, QDoubleValidator
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 import logging
 from datetime import datetime
+import qtawesome as qta
 
 # Importar componentes del sistema de diseño
 from ui.components import (
@@ -44,11 +45,12 @@ class NuevaVentaWindow(QWidget):
     venta_completada = Signal(dict)
     cerrar_solicitado = Signal()
     
-    def __init__(self, pg_manager, supabase_service, user_data, parent=None):
+    def __init__(self, pg_manager, supabase_service, user_data, turno_id=None, parent=None):
         super().__init__(parent)
         self.pg_manager = pg_manager
         self.supabase_service = supabase_service
         self.user_data = user_data
+        self.turno_id = turno_id  # ID del turno de caja actual
         self.codigo = ""  # Initialize 'codigo' as an empty string
         self.texto = ""   # Initialize 'texto' as an empty string
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -65,6 +67,14 @@ class NuevaVentaWindow(QWidget):
         
         self.setup_ui()
         
+        # Verificar turno al cargar y bloquear si no hay
+        if not self.turno_id:
+            self.deshabilitar_ventas()
+        
+        # Verificar turno al cargar
+        if not self.turno_id:
+            self.deshabilitar_ventas()
+        
     def setup_ui(self):
         """Configurar interfaz de nueva venta"""
         root_layout = QHBoxLayout(self)
@@ -79,6 +89,26 @@ class NuevaVentaWindow(QWidget):
 
         root_layout.addWidget(productos_panel, 3)
         root_layout.addWidget(carrito_panel, 2)
+    
+    def deshabilitar_ventas(self):
+        """Deshabilitar interfaz de ventas cuando no hay turno abierto"""
+        show_error_dialog(
+            self,
+            "Turno No Disponible",
+            "No hay un turno de caja abierto.\n\nNo se pueden realizar ventas sin un turno activo.\n\nPor favor, cierra sesión y vuelve a iniciar para abrir un turno."
+        )
+        # Deshabilitar toda la interfaz
+        self.setEnabled(False)
+    
+    def deshabilitar_ventas(self):
+        """Deshabilitar interfaz de ventas cuando no hay turno abierto"""
+        show_error_dialog(
+            self,
+            "Turno No Disponible",
+            "No hay un turno de caja abierto.\n\nNo se pueden realizar ventas sin un turno activo.\n\nPor favor, cierra sesión y vuelve a iniciar para abrir un turno."
+        )
+        # Deshabilitar toda la interfaz
+        self.setEnabled(False)
 
     def _build_products_panel(self):
         """Construir panel con buscador, catálogo y total."""
@@ -114,7 +144,7 @@ class NuevaVentaWindow(QWidget):
         header.resizeSection(4, 80)  # Ancho de columna de acción
 
         self.productos_table.verticalHeader().setVisible(False)
-        self.productos_table.verticalHeader().setDefaultSectionSize(50)  # Altura de fila para mostrar botón completo
+        self.productos_table.verticalHeader().setDefaultSectionSize(55)  # Altura de fila para centrar botón
         self.productos_table.setSelectionMode(QTableWidget.NoSelection)
         self.productos_table.setFocusPolicy(Qt.NoFocus)
         self.productos_table.setAlternatingRowColors(True)
@@ -245,32 +275,36 @@ class NuevaVentaWindow(QWidget):
     def _create_add_button(self, producto):
         """Crear botón de agregar centrado dentro de la celda."""
         container = QWidget()
-        container.setContentsMargins(0, 0, 0, 0)
-
+        container.setStyleSheet("background: transparent;")
+        
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setAlignment(Qt.AlignCenter)
-
+        
         btn = QPushButton()
+        btn.setIcon(qta.icon('fa5s.plus', color='white'))
         btn.setCursor(QCursor(Qt.PointingHandCursor))
         btn.setToolTip("Agregar al carrito")
+        btn.setFixedSize(40, 40)
         btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {WindowsPhoneTheme.TILE_GREEN};
                 color: white;
                 border: none;
                 border-radius: 5px;
-                font-size: 14px;
-                font-weight: bold;
+                padding: 0px;
             }}
             QPushButton:hover {{
                 background-color: {WindowsPhoneTheme.TILE_TEAL};
             }}
+            QPushButton:pressed {{
+                background-color: #1b5e20;
+            }}
         """)
-
+        
         btn.clicked.connect(lambda _, p=producto: self.agregar_al_carrito(p))
-        layout.addWidget(btn)
-
+        layout.addWidget(btn, 0, Qt.AlignCenter)
+        
         return container
 
     def _create_remove_button(self, index):
@@ -536,6 +570,38 @@ class NuevaVentaWindow(QWidget):
             self.actualizar_carrito()
             self.cerrar_solicitado.emit()
     
+    def verificar_turno_abierto(self):
+        """Verificar que haya un turno abierto consultando la base de datos"""
+        try:
+            # Consultar el último turno en la tabla
+            response = self.pg_manager.client.table('turnos_caja').select(
+                'id_turno, cerrado, fecha_apertura'
+            ).order('fecha_apertura', desc=True).limit(1).execute()
+            
+            if response.data and len(response.data) > 0:
+                ultimo_turno = response.data[0]
+                # Verificar si está abierto (cerrado = false)
+                if not ultimo_turno.get('cerrado', True):
+                    # Actualizar turno_id con el turno actualmente abierto
+                    self.turno_id = ultimo_turno['id_turno']
+                    return True
+            
+            # No hay turno abierto
+            return False
+            
+        except Exception as e:
+            logging.error(f"Error verificando turno abierto: {e}")
+            return False
+    
+    def mostrar_dialogo_abrir_turno(self):
+        """Mostrar diálogo para que el usuario abra un turno"""
+        show_warning_dialog(
+            self,
+            "Turno Cerrado",
+            "No hay un turno de caja abierto.",
+            "Para realizar ventas, debe abrir un turno primero. Por favor, cierre sesión y vuelva a iniciar para abrir un turno automáticamente."
+        )
+    
     def limpiar_carrito(self):
         """Limpiar todo el carrito"""
         if not self.carrito:
@@ -553,8 +619,14 @@ class NuevaVentaWindow(QWidget):
             
     def confirmar_venta(self):
         """Mostrar ventana de confirmación antes de procesar la venta"""
+        # Verificar que haya productos en el carrito
         if not self.carrito:
             show_warning_dialog(self, "Carrito Vacío", "Agregue productos al carrito antes de procesar la venta.")
+            return
+        
+        # Verificar que haya un turno REALMENTE abierto consultando la BD
+        if not self.verificar_turno_abierto():
+            self.mostrar_dialogo_abrir_turno()
             return
         
         # Crear diálogo de confirmación
@@ -565,13 +637,19 @@ class NuevaVentaWindow(QWidget):
     def procesar_venta(self):
         """Procesar la venta"""
         try:
+            # Doble verificación: asegurarse que el turno sigue abierto
+            if not self.verificar_turno_abierto():
+                self.mostrar_dialogo_abrir_turno()
+                return
+            
             # Crear venta en la base de datos
             venta_data = {
                 'total': self.total_venta,
                 'metodo_pago': 'efectivo',
                 'tipo_venta': 'producto',
                 'productos': self.carrito,
-                'id_usuario': self.user_data['id_usuario']
+                'id_usuario': self.user_data['id_usuario'],
+                'id_turno': self.turno_id  # Agregar ID del turno
             }
             
             venta_id = self.pg_manager.create_sale(venta_data)

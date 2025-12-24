@@ -29,7 +29,8 @@ from ui.components import (
     show_warning_dialog,
     show_error_dialog,
     TouchNumericInput,
-    show_success_dialog
+    show_success_dialog,
+    aplicar_estilo_fecha
 )
 from database.postgres_manager import PostgresManager
 
@@ -175,9 +176,8 @@ class MovimientoInventarioWindow(QWidget):
         self.fecha_input = QDateEdit()
         self.fecha_input.setDate(QDate.currentDate())
         self.fecha_input.setCalendarPopup(True)
-        self.fecha_input.setDisplayFormat("dd/MM/yyyy")
+        aplicar_estilo_fecha(self.fecha_input)
         self.fecha_input.setMinimumHeight(46)
-        self.fecha_input.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
         panel_layout.addWidget(self.fecha_input)
         
         # Observaciones

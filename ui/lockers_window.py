@@ -6,11 +6,13 @@ Grid de lockers con formulario para crear/editar
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLineEdit, QComboBox, QTableWidget, QTableWidgetItem,
-    QCheckBox, QDialog, QHeaderView, QPushButton
+    QCheckBox, QDialog, QHeaderView, QPushButton,
+    QAbstractItemView
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 import logging
+import qtawesome as qta
 
 from ui.components import (
     WindowsPhoneTheme,
@@ -262,50 +264,61 @@ class LockersWindow(QWidget):
         self.search_bar.connect_search(self.filtrar_lockers)
         layout.addWidget(self.search_bar)
         
-        # Panel de acciones
-        panel = ContentPanel()
-        panel_layout = QHBoxLayout(panel)
-        panel_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
+        # Panel con info
+        info_panel = ContentPanel()
+        info_layout = QHBoxLayout(info_panel)
+        self.info_total = StyledLabel("Total: 0 lockers", bold=True)
+        info_layout.addWidget(self.info_total)
+        info_layout.addStretch()
+        layout.addWidget(info_panel)
         
-        btn_nuevo = TileButton("Nuevo\nLocker", "fa5s.plus", WindowsPhoneTheme.TILE_GREEN)
-        btn_nuevo.setMaximumHeight(120)
+        # Panel de lista de lockers
+        table_panel = self._setup_panel_lista()
+        layout.addWidget(table_panel)
+        
+        # Botones al pie (todos en una fila)
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
+        
+        btn_nuevo = TileButton("Nuevo Locker", "fa5s.plus", WindowsPhoneTheme.TILE_GREEN)
         btn_nuevo.clicked.connect(self.abrir_formulario_nuevo)
-        panel_layout.addWidget(btn_nuevo)
+        buttons_layout.addWidget(btn_nuevo)
         
         btn_refrescar = TileButton("Actualizar", "fa5s.sync", WindowsPhoneTheme.TILE_BLUE)
-        btn_refrescar.setMaximumHeight(120)
         btn_refrescar.clicked.connect(self.cargar_lockers)
-        panel_layout.addWidget(btn_refrescar)
+        buttons_layout.addWidget(btn_refrescar)
         
-        panel_layout.addStretch()
+        btn_volver = TileButton("Volver", "fa5s.arrow-left", WindowsPhoneTheme.TILE_RED)
+        btn_volver.clicked.connect(self.cerrar_solicitado.emit)
+        buttons_layout.addWidget(btn_volver)
         
-        self.info_total = StyledLabel("Total: 0 lockers", bold=True)
-        panel_layout.addWidget(self.info_total, alignment=Qt.AlignVCenter)
-        
-        layout.addWidget(panel)
+        layout.addLayout(buttons_layout)
+    
+    def _setup_panel_lista(self):
+        """Panel con la tabla de lockers"""
+        panel = ContentPanel()
+        panel_layout = QVBoxLayout(panel)
         
         # Tabla
-        table_panel = ContentPanel()
-        table_layout = QVBoxLayout(table_panel)
-        
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels([
             "Número", "Ubicación", "Tipo", "Requiere Llave", "Estado", "Acciones"
         ])
         
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SingleSelection)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        
+        # Configurar headers
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # Número
+        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Ubicación
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Tipo
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Requiere Llave
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Estado
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Acciones
         
         # Estilo de tabla
         self.table.setStyleSheet(f"""
@@ -335,23 +348,9 @@ class LockersWindow(QWidget):
             }}
         """)
         
-        table_layout.addWidget(self.table)
-        layout.addWidget(table_panel)
+        panel_layout.addWidget(self.table)
         
-        layout.addStretch()
-        
-        # Botones al pie
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
-        
-        buttons_layout.addStretch()
-        
-        btn_volver = TileButton("Volver", "fa5s.arrow-left", WindowsPhoneTheme.TILE_RED)
-        btn_volver.setMaximumHeight(120)
-        btn_volver.clicked.connect(self.cerrar_solicitado.emit)
-        buttons_layout.addWidget(btn_volver)
-        
-        layout.addLayout(buttons_layout)
+        return panel
     
     def cargar_lockers(self):
         """Cargar lockers desde la base de datos"""
@@ -373,6 +372,7 @@ class LockersWindow(QWidget):
         
         for i, locker in enumerate(lockers):
             self.table.insertRow(i)
+            self.table.setRowHeight(i, 60)
             
             # Número
             self.table.setItem(i, 0, QTableWidgetItem(locker['numero']))
@@ -402,9 +402,11 @@ class LockersWindow(QWidget):
             acciones_layout.setContentsMargins(5, 5, 5, 5)
             acciones_layout.setSpacing(5)
             
-            btn_editar = QPushButton("Editar")
+            btn_editar = QPushButton()
+            btn_editar.setIcon(qta.icon('fa5s.edit', color='white'))
+            btn_editar.setToolTip("Editar locker")
             btn_editar.setMinimumHeight(30)
-            btn_editar.setMaximumWidth(70)
+            btn_editar.setFixedWidth(40)
             btn_editar.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {WindowsPhoneTheme.TILE_BLUE};
@@ -419,9 +421,11 @@ class LockersWindow(QWidget):
             btn_editar.clicked.connect(lambda checked, l=locker: self.editar_locker(l))
             acciones_layout.addWidget(btn_editar)
             
-            btn_eliminar = QPushButton("Eliminar")
+            btn_eliminar = QPushButton()
+            btn_eliminar.setIcon(qta.icon('fa5s.trash', color='white'))
+            btn_eliminar.setToolTip("Eliminar locker")
             btn_eliminar.setMinimumHeight(30)
-            btn_eliminar.setMaximumWidth(70)
+            btn_eliminar.setFixedWidth(40)
             btn_eliminar.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {WindowsPhoneTheme.TILE_RED};
@@ -445,7 +449,7 @@ class LockersWindow(QWidget):
     
     def filtrar_lockers(self):
         """Filtrar lockers por búsqueda"""
-        texto = self.search_bar.get_text().lower()
+        texto = self.search_bar.text().lower()
         
         if not texto:
             self.mostrar_lockers(self.lockers_data)

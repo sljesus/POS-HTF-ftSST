@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 import logging
+import qtawesome as qta
 
 from ui.components import (
     WindowsPhoneTheme,
@@ -217,45 +218,35 @@ class UbicacionesWindow(QWidget):
         title = SectionTitle("ADMINISTRACIÓN DE UBICACIONES")
         layout.addWidget(title)
         
-        # Panel de acciones rápidas
-        acciones_panel = self._setup_panel_acciones()
-        layout.addWidget(acciones_panel)
+        # Panel con info
+        info_panel = ContentPanel()
+        info_layout = QHBoxLayout(info_panel)
+        self.info_total = StyledLabel("Total: 0 ubicaciones", bold=True)
+        info_layout.addWidget(self.info_total)
+        info_layout.addStretch()
+        layout.addWidget(info_panel)
         
         # Panel de lista de ubicaciones
         lista_panel = self._setup_panel_lista()
         layout.addWidget(lista_panel)
         
-        layout.addStretch()
+        # Botones al pie (todos en una fila)
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
         
-        # Botones al pie
-        buttons_layout = self._setup_footer()
-        layout.addLayout(buttons_layout)
-    
-    def _setup_panel_acciones(self):
-        """Panel superior con botones de acción"""
-        panel = ContentPanel()
-        panel_layout = QHBoxLayout(panel)
-        panel_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
-        
-        # Botón Nueva Ubicación
-        btn_nuevo = TileButton("Nueva\nUbicación", "fa5s.plus", WindowsPhoneTheme.TILE_GREEN)
-        btn_nuevo.setMaximumHeight(120)
+        btn_nuevo = TileButton("Nueva Ubicación", "fa5s.plus", WindowsPhoneTheme.TILE_GREEN)
         btn_nuevo.clicked.connect(self.abrir_formulario_nuevo)
-        panel_layout.addWidget(btn_nuevo)
+        buttons_layout.addWidget(btn_nuevo)
         
-        # Botón Refrescar
         btn_refrescar = TileButton("Actualizar", "fa5s.sync", WindowsPhoneTheme.TILE_BLUE)
-        btn_refrescar.setMaximumHeight(120)
         btn_refrescar.clicked.connect(self.cargar_ubicaciones)
-        panel_layout.addWidget(btn_refrescar)
+        buttons_layout.addWidget(btn_refrescar)
         
-        panel_layout.addStretch()
+        btn_volver = TileButton("Volver", "fa5s.arrow-left", WindowsPhoneTheme.TILE_RED)
+        btn_volver.clicked.connect(self.cerrar_solicitado.emit)
+        buttons_layout.addWidget(btn_volver)
         
-        # Info tile
-        self.info_total = StyledLabel("Total: 0 ubicaciones", bold=True)
-        panel_layout.addWidget(self.info_total, alignment=Qt.AlignVCenter)
-        
-        return panel
+        layout.addLayout(buttons_layout)
     
     def _setup_panel_lista(self):
         """Panel con la tabla de ubicaciones"""
@@ -311,20 +302,6 @@ class UbicacionesWindow(QWidget):
         
         return panel
     
-    def _setup_footer(self):
-        """Footer con botones de acción"""
-        footer_layout = QHBoxLayout()
-        footer_layout.setSpacing(WindowsPhoneTheme.TILE_SPACING)
-        
-        footer_layout.addStretch()
-        
-        btn_volver = TileButton("Volver", "fa5s.arrow-left", WindowsPhoneTheme.TILE_RED)
-        btn_volver.setMaximumHeight(120)
-        btn_volver.clicked.connect(self.cerrar_solicitado.emit)
-        footer_layout.addWidget(btn_volver)
-        
-        return footer_layout
-    
     def cargar_ubicaciones(self):
         """Cargar ubicaciones desde la base de datos"""
         try:
@@ -345,6 +322,7 @@ class UbicacionesWindow(QWidget):
         
         for i, ubicacion in enumerate(self.ubicaciones):
             self.table.insertRow(i)
+            self.table.setRowHeight(i, 60)  # Altura consistente
             
             # ID
             id_item = QTableWidgetItem(str(ubicacion['id_ubicacion']))
@@ -370,16 +348,19 @@ class UbicacionesWindow(QWidget):
                 estado_item.setForeground(Qt.darkRed)
             self.table.setItem(i, 3, estado_item)
             
-            # Botones de acción
+            # Botones de acción con iconos
             acciones_widget = QWidget()
             acciones_widget.setStyleSheet("background: transparent;")
             acciones_layout = QHBoxLayout(acciones_widget)
             acciones_layout.setContentsMargins(5, 5, 5, 5)
             acciones_layout.setSpacing(5)
             
-            btn_editar = QPushButton("Editar")
+            # Botón Editar con icono
+            btn_editar = QPushButton()
+            btn_editar.setIcon(qta.icon('fa5s.edit', color='white'))
+            btn_editar.setToolTip("Editar ubicación")
             btn_editar.setMinimumHeight(30)
-            btn_editar.setMaximumWidth(70)
+            btn_editar.setFixedWidth(40)
             btn_editar.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {WindowsPhoneTheme.TILE_BLUE};
@@ -394,9 +375,12 @@ class UbicacionesWindow(QWidget):
             btn_editar.clicked.connect(lambda checked, u=ubicacion: self.editar_ubicacion(u))
             acciones_layout.addWidget(btn_editar)
             
-            btn_eliminar = QPushButton("Eliminar")
+            # Botón Eliminar con icono
+            btn_eliminar = QPushButton()
+            btn_eliminar.setIcon(qta.icon('fa5s.trash', color='white'))
+            btn_eliminar.setToolTip("Eliminar ubicación")
             btn_eliminar.setMinimumHeight(30)
-            btn_eliminar.setMaximumWidth(70)
+            btn_eliminar.setFixedWidth(40)
             btn_eliminar.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {WindowsPhoneTheme.TILE_RED};

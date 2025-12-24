@@ -226,19 +226,27 @@ class CierreCajaWindow(QWidget):
         parent_layout.addLayout(summary_layout)
         
     def cargar_resumen(self):
-        """Cargar resumen del día"""
+        """Cargar resumen del turno actual"""
         try:
-            # Obtener ventas del día usando Supabase
-            from datetime import date
+            if not self.turno_abierto:
+                logging.warning("No hay turno abierto para cargar resumen")
+                self.total_esperado_valor = 0.0
+                return
+            
+            # Obtener monto inicial del turno
+            monto_inicial = float(self.turno_abierto.get('monto_inicial', 0))
+            
+            # Obtener ventas del turno actual usando Supabase
             response = self.pg_manager.client.table('ventas').select(
                 'id_venta, fecha, total, usuarios(nombre_completo)'
-            ).gte('fecha', f'{date.today()}T00:00:00').lte(
-                'fecha', f'{date.today()}T23:59:59'
-            ).order('fecha', desc=True).execute()
+            ).eq('id_turno', self.turno_abierto['id_turno']).order('fecha', desc=True).execute()
             
             ventas = response.data or []
-            total_esperado = sum(float(v.get('total', 0)) for v in ventas)
+            total_ventas_turno = sum(float(v.get('total', 0)) for v in ventas)
             num_ventas = len(ventas)
+            
+            # Total esperado = monto inicial + ventas del turno
+            total_esperado = monto_inicial + total_ventas_turno
             
             # Actualizar widgets
             self.esperado_value.setText(f"${total_esperado:.2f}")
@@ -246,6 +254,8 @@ class CierreCajaWindow(QWidget):
             
             # Guardar valores para cálculos
             self.total_esperado_valor = total_esperado
+            
+            logging.info(f"Resumen del turno: Inicial=${monto_inicial:.2f}, Ventas=${total_ventas_turno:.2f}, Esperado=${total_esperado:.2f}")
             
         except Exception as e:
             logging.error(f"Error cargando resumen: {e}")

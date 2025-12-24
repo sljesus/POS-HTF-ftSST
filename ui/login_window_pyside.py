@@ -153,6 +153,21 @@ class LoginWindow(QMainWindow):
         self.password_input.setMinimumHeight(50)
         self.password_input.setFont(QFont("Segoe UI", 12))
         self.password_input.returnPressed.connect(self.handle_login)
+
+        # Icono para mostrar/ocultar contraseña (sin overlays para evitar recortes)
+        self._toggle_password_action = None
+        try:
+            import qtawesome as qta
+
+            self.password_input.setTextMargins(0, 0, 36, 0)
+            self._toggle_password_action = self.password_input.addAction(
+                qta.icon('fa5s.eye', color=self.PRIMARY_BLUE),
+                QLineEdit.TrailingPosition
+            )
+            self._toggle_password_action.setToolTip("Mostrar contraseña")
+            self._toggle_password_action.triggered.connect(self.toggle_password_visibility)
+        except Exception:
+            self._toggle_password_action = None
         
         # Botón de login
         self.login_button = QPushButton("INICIAR SESIÓN")
@@ -358,6 +373,25 @@ class LoginWindow(QMainWindow):
             self.login_button.setEnabled(True)
             self.login_button.setText("INICIAR SESIÓN")
             self.login_button.setStyleSheet("")  # Restaurar estilo original
+
+    def toggle_password_visibility(self):
+        """Mostrar/ocultar texto en el campo de contraseña."""
+        if not self._toggle_password_action:
+            return
+
+        try:
+            import qtawesome as qta
+        except Exception:
+            return
+
+        if self.password_input.echoMode() == QLineEdit.Password:
+            self.password_input.setEchoMode(QLineEdit.Normal)
+            self._toggle_password_action.setIcon(qta.icon('fa5s.eye-slash', color=self.PRIMARY_BLUE))
+            self._toggle_password_action.setToolTip("Ocultar contraseña")
+        else:
+            self.password_input.setEchoMode(QLineEdit.Password)
+            self._toggle_password_action.setIcon(qta.icon('fa5s.eye', color=self.PRIMARY_BLUE))
+            self._toggle_password_action.setToolTip("Mostrar contraseña")
             
     def show_error(self, message):
         """Mostrar mensaje de error"""

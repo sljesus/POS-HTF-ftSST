@@ -661,6 +661,7 @@ class PostgresManager:
             venta_insert = {
                 'id_usuario': venta_data['id_usuario'],
                 'id_miembro': venta_data.get('id_miembro'),
+                'id_turno': venta_data.get('id_turno'),  # Agregar ID del turno
                 'fecha': venta_data.get('fecha', datetime.now().isoformat()),
                 'subtotal': float(subtotal),
                 'descuento': float(descuento),
@@ -1104,11 +1105,11 @@ class PostgresManager:
             if not self.is_connected:
                 self.connect()
             
-            # Obtener movimientos básicos
+            # Obtener movimientos básicos, excluyendo los de tipo "venta"
             response = self.client.table('movimientos_inventario').select(
                 'id_movimiento, fecha, tipo_movimiento, codigo_interno, tipo_producto, '
                 'cantidad, stock_anterior, stock_nuevo, motivo, id_usuario, id_venta'
-            ).order('fecha', desc=True).limit(limite).execute()
+            ).neq('tipo_movimiento', 'venta').order('fecha', desc=True).limit(limite).execute()
             
             movimientos = response.data or []
             movimientos_completos = []

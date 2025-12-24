@@ -24,7 +24,8 @@ from ui.components import (
     SearchBar,
     show_info_dialog,
     show_warning_dialog,
-    show_error_dialog
+    show_error_dialog,
+    aplicar_estilo_fecha
 )
 
 
@@ -211,9 +212,8 @@ class HistorialAccesoWindow(QWidget):
         self.fecha_inicio = QDateEdit()
         self.fecha_inicio.setDate(QDate.currentDate().addDays(-7))  # Últimos 7 días
         self.fecha_inicio.setCalendarPopup(True)
-        self.fecha_inicio.setDisplayFormat("dd/MM/yyyy")
+        aplicar_estilo_fecha(self.fecha_inicio)
         self.fecha_inicio.setMinimumHeight(40)
-        self.fecha_inicio.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
         self.fecha_inicio.dateChanged.connect(self.aplicar_filtros)
         fecha_inicio_layout.addWidget(self.fecha_inicio)
         
@@ -231,9 +231,8 @@ class HistorialAccesoWindow(QWidget):
         self.fecha_fin = QDateEdit()
         self.fecha_fin.setDate(QDate.currentDate())
         self.fecha_fin.setCalendarPopup(True)
-        self.fecha_fin.setDisplayFormat("dd/MM/yyyy")
+        aplicar_estilo_fecha(self.fecha_fin)
         self.fecha_fin.setMinimumHeight(40)
-        self.fecha_fin.setFont(QFont(WindowsPhoneTheme.FONT_FAMILY, WindowsPhoneTheme.FONT_SIZE_NORMAL))
         self.fecha_fin.dateChanged.connect(self.aplicar_filtros)
         fecha_fin_layout.addWidget(self.fecha_fin)
         
