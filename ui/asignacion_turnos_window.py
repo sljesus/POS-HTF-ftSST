@@ -194,7 +194,7 @@ class AsignacionTurnosWindow(QWidget):
             minimum=0.0,
             maximum=100000.0,
             decimals=2,
-            default_value=0.0
+            default_value=None
         )
         grid.addWidget(self.monto_inicial, row, 1)
         row += 1

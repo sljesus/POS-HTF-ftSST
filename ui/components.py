@@ -1122,7 +1122,7 @@ class TouchNumericInput(QLineEdit):
     
     valueChanged = Signal(int)  # Señal compatible con QSpinBox
     
-    def __init__(self, minimum=0, maximum=999999, default_value=0, parent=None):
+    def __init__(self, minimum=0, maximum=999999, default_value=None, parent=None):
         super().__init__(parent)
         
         self._minimum = minimum
@@ -1153,11 +1153,17 @@ class TouchNumericInput(QLineEdit):
             }}
         """)
         
-        # Valor inicial
-        self.setValue(default_value)
-        
-        # Conectar señal de cambio
+        self._suppress_signals = False
+
+        # Inicia vacío por defecto (mejor UX). Si se provee default_value, se precarga.
+        if default_value is not None:
+            self.setValue(default_value)
+        else:
+            self.setText("")
+
+        # Señales
         self.textChanged.connect(self._on_text_changed)
+        self.editingFinished.connect(self._format_on_finish)
     
     def setValue(self, value):
         """Establecer valor (compatible con QSpinBox)"""
@@ -1168,11 +1174,11 @@ class TouchNumericInput(QLineEdit):
         """Obtener valor (compatible con QSpinBox)"""
         text = self.text().strip()
         if not text:
-            return self._minimum
+            return 0
         try:
             return int(text)
         except ValueError:
-            return self._minimum
+            return 0
     
     def setRange(self, minimum, maximum):
         """Establecer rango (compatible con QSpinBox)"""
@@ -1192,11 +1198,35 @@ class TouchNumericInput(QLineEdit):
     
     def _on_text_changed(self, text):
         """Emitir señal cuando cambia el valor"""
+        if self._suppress_signals:
+            return
         if text.strip():
             try:
                 self.valueChanged.emit(int(text))
             except ValueError:
                 pass
+
+    def _format_on_finish(self):
+        """Validar y normalizar al terminar edición (Tab/Enter/focus out)."""
+        raw = self.text().strip()
+        if not raw:
+            self.clearFocus()
+            return
+
+        try:
+            value = int(raw)
+        except ValueError:
+            value = self._minimum
+
+        value = max(self._minimum, min(self._maximum, value))
+
+        self._suppress_signals = True
+        try:
+            self.setText(str(value))
+        finally:
+            self._suppress_signals = False
+
+        self.clearFocus()
 
 
 class TouchMoneyInput(QLineEdit):
@@ -1213,7 +1243,7 @@ class TouchMoneyInput(QLineEdit):
     
     valueChanged = Signal(float)  # Señal compatible con QDoubleSpinBox
     
-    def __init__(self, minimum=0.0, maximum=999999.99, decimals=2, default_value=0.0, prefix="$ ", parent=None):
+    def __init__(self, minimum=0.0, maximum=999999.99, decimals=2, default_value=None, prefix="$ ", parent=None):
         super().__init__(parent)
         
         self._minimum = minimum
@@ -1224,6 +1254,8 @@ class TouchMoneyInput(QLineEdit):
         # Validador para números decimales
         self.validator = QDoubleValidator(minimum, maximum, decimals, self)
         self.validator.setNotation(QDoubleValidator.StandardNotation)
+        # Se aplica en modo edición (sin prefijo)
+        self.setValidator(self.validator)
         
         # Configurar estilo táctil
         self.setMinimumHeight(50)
@@ -1247,12 +1279,39 @@ class TouchMoneyInput(QLineEdit):
             }}
         """)
         
-        # Valor inicial
-        self.setValue(default_value)
-        
+        self._suppress_signals = False
+        self._is_editing = False
+
+        # Inicia vacío por defecto (mejor UX). Si se provee default_value, se precarga formateado.
+        if default_value is not None:
+            self.setValue(default_value)
+        else:
+            self.setText("")
+
         # Conectar señales
         self.textChanged.connect(self._on_text_changed)
-        self.editingFinished.connect(self._format_value)
+        self.editingFinished.connect(self._format_on_finish)
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self._is_editing = True
+
+        # Al editar, quitar prefijo y dejar número crudo.
+        text = self.text().strip()
+        if text.startswith(self._prefix):
+            raw = text[len(self._prefix):].strip()
+            self._suppress_signals = True
+            try:
+                self.setText(raw)
+            finally:
+                self._suppress_signals = False
+
+    def keyPressEvent(self, event):
+        # Enter/Return: terminar edición y quitar foco
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            self._format_on_finish()
+            return
+        super().keyPressEvent(event)
     
     def setValue(self, value):
         """Establecer valor (compatible con QDoubleSpinBox)"""
@@ -1264,11 +1323,11 @@ class TouchMoneyInput(QLineEdit):
         """Obtener valor numérico (compatible con QDoubleSpinBox)"""
         text = self.text().replace(self._prefix, "").strip()
         if not text:
-            return self._minimum
+            return 0.0
         try:
             return float(text)
         except ValueError:
-            return self._minimum
+            return 0.0
     
     def setRange(self, minimum, maximum):
         """Establecer rango (compatible con QDoubleSpinBox)"""
@@ -1294,22 +1353,92 @@ class TouchMoneyInput(QLineEdit):
     def setPrefix(self, prefix):
         """Establecer prefijo (ej: '$ ')"""
         self._prefix = prefix
+        # Respetar estado vacío (no forzar '$ 0.00')
+        if not self.text().strip():
+            return
         current_value = self.value()
         self.setValue(current_value)
     
     def _on_text_changed(self, text):
-        """Emitir señal cuando cambia el valor"""
-        clean_text = text.replace(self._prefix, "").strip()
-        if clean_text:
+        """Edición permisiva + límite de decimales en tiempo real."""
+        if self._suppress_signals:
+            return
+
+        raw = text.strip()
+
+        # Si por alguna razón llega con prefijo, limpiarlo
+        if raw.startswith(self._prefix):
+            raw = raw[len(self._prefix):].strip()
+
+        # Normalizar coma a punto (UX)
+        if "," in raw:
+            raw = raw.replace(",", ".")
+
+        # Permitir vacío
+        if not raw:
+            return
+
+        # Mantener solo dígitos y un punto
+        cleaned_chars = []
+        dot_seen = False
+        for ch in raw:
+            if ch.isdigit():
+                cleaned_chars.append(ch)
+            elif ch == "." and not dot_seen:
+                cleaned_chars.append(ch)
+                dot_seen = True
+        cleaned = "".join(cleaned_chars)
+
+        # Limitar decimales
+        if "." in cleaned:
+            left, right = cleaned.split(".", 1)
+            right = right[: self._decimals]
+            cleaned = left + "." + right
+
+        if cleaned != text:
+            self._suppress_signals = True
             try:
-                self.valueChanged.emit(float(clean_text))
-            except ValueError:
-                pass
+                cursor_pos = self.cursorPosition()
+                self.setText(cleaned)
+                self.setCursorPosition(min(cursor_pos, len(cleaned)))
+            finally:
+                self._suppress_signals = False
+
+        try:
+            self.valueChanged.emit(float(cleaned))
+        except ValueError:
+            pass
     
-    def _format_value(self):
-        """Formatear valor al perder el foco"""
-        current = self.value()
-        self.setValue(current)
+    def _format_on_finish(self):
+        """Formatear y validar al terminar edición (Tab/Enter/focus out)."""
+        if self._suppress_signals:
+            self.clearFocus()
+            return
+
+        raw = self.text().strip()
+
+        # Aceptar vacío: se queda vacío
+        if not raw:
+            self._is_editing = False
+            self.clearFocus()
+            return
+
+        raw = raw.replace(",", ".")
+        try:
+            value = float(raw)
+        except ValueError:
+            value = self._minimum
+
+        value = max(self._minimum, min(self._maximum, value))
+
+        self._suppress_signals = True
+        try:
+            self.setText(f"{self._prefix}{value:.{self._decimals}f}")
+        finally:
+            self._suppress_signals = False
+
+        self._is_editing = False
+        self.clearFocus()
 
 
 def aplicar_estilo_fecha(date_edit):

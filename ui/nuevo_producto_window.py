@@ -130,7 +130,7 @@ class NuevoProductoWindow(QWidget):
             minimum=0.01,
             maximum=999999.99,
             decimals=2,
-            default_value=0.0
+            default_value=None
         )
         comunes_form.addRow("Precio de Venta *:", self.precio_input)
         
@@ -187,7 +187,7 @@ class NuevoProductoWindow(QWidget):
             minimum=0.0,
             maximum=999999.99,
             decimals=2,
-            default_value=0.0,
+            default_value=None,
             prefix=" gr "
         )
         normales_form.addRow("Peso:", self.peso_input)
@@ -237,7 +237,7 @@ class NuevoProductoWindow(QWidget):
             minimum=0.0,
             maximum=999999.99,
             decimals=2,
-            default_value=0.0,
+            default_value=None,
             prefix=" gr "
         )
         suplementos_form.addRow("Peso Neto:", self.peso_neto_input)
