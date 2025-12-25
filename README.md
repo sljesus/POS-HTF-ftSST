@@ -212,8 +212,10 @@ precio = TouchMoneyInput(
 
 ## 📚 Documentación Adicional
 
+- `DOCUMENTACION_TECNICA.md` - **Documentación técnica completa** (arquitectura, flujos, componentes)
 - `INICIAR_DEMO.bat` - Script para iniciar la aplicación rápidamente
 - `setup_postgres_trigger.sql` - Triggers para notificaciones
+- `INTEGRACION_IMPRESORA_ESCPOS.md` - Guía completa de impresora térmica
 - `GUIA_USUARIO_IMPRESORA.txt` - Configuración de impresora térmica
 - `TABLA_COMPARATIVA.txt` - Comparativa de esquemas DB
 - `RESUMEN_INTEGRACION.txt` - Integración con Supabase
@@ -221,8 +223,8 @@ precio = TouchMoneyInput(
 ## 🚀 Características Destacadas
 
 1. **Pantalla Táctil**: Optimizado desde el inicio para tablets y touch screens
-2. **Sin Conexión**: Funciona completamente offline con PostgreSQL local
-3. **Sincronización**: Opcionalmente sincroniza con Supabase para app móvil
+2. **Backend en la Nube**: Usa Supabase (PostgreSQL) como base de datos principal - **Requiere conexión a Internet**
+3. **Sincronización**: Integración con app móvil a través de Supabase
 4. **Modular**: Arquitectura limpia y escalable
 5. **Producción**: Ejecutable .exe listo para distribuir (no requiere Python)
 

@@ -3,15 +3,46 @@ Configuración de la aplicación POS HTF
 """
 
 import os
+import sys
 from dotenv import load_dotenv
+
+def get_base_path():
+    """
+    Obtener la ruta base de la aplicación.
+    Maneja tanto ejecución normal como ejecución desde PyInstaller.
+    """
+    if getattr(sys, 'frozen', False):
+        # Ejecutándose desde PyInstaller
+        # sys.executable es la ruta del .exe
+        base_path = os.path.dirname(sys.executable)
+    else:
+        # Ejecutándose desde código fuente
+        # Ir 2 niveles arriba desde utils/config.py (utils -> raíz)
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return base_path
 
 class Config:
     def __init__(self):
-        # Cargar variables de entorno
-        load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'), encoding='utf-8')
+        # Obtener ruta base de la aplicación
+        base_path = get_base_path()
+        
+        # Cargar variables de entorno desde la carpeta del ejecutable
+        env_path = os.path.join(base_path, '.env')
+        if os.path.exists(env_path):
+            load_dotenv(dotenv_path=env_path, encoding='utf-8')
+        else:
+            # Intentar también desde la ruta relativa original (para desarrollo)
+            dev_env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+            if os.path.exists(dev_env_path):
+                load_dotenv(dotenv_path=dev_env_path, encoding='utf-8')
         
         # Configuración de la base de datos SQLite
-        self.DATABASE_PATH = os.path.join(os.path.dirname(__file__), '..', 'database', 'pos_htf.db')
+        # En PyInstaller, los datos están en _internal/database, pero queremos
+        # guardar la BD en el directorio del ejecutable para que persista
+        db_dir = os.path.join(base_path, 'database')
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+        self.DATABASE_PATH = os.path.join(db_dir, 'pos_htf.db')
         
         # Configuración de Supabase
         self.SUPABASE_URL = os.getenv('SUPABASE_URL', '')

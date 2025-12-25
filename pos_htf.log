@@ -1044,3 +1044,118 @@
 2025-12-19 13:06:37,672 - INFO - HTTP Request: POST https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/registro_entradas "HTTP/2 201 Created"
 2025-12-19 13:06:37,789 - INFO - HTTP Request: POST https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/notificaciones_pos "HTTP/2 201 Created"
 2025-12-19 13:06:37,790 - INFO - [DEBUG] Notificaci�n procesada: {'id_miembro': 2, 'id_notificacion': 8, 'monto': 80.0, 'tipo': 'pago_efectivo'}
+2025-12-24 16:59:27,142 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-12-24 16:59:27,204 - INFO - [OK] Conexión exitosa a Supabase
+2025-12-24 16:59:27,379 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-12-24 16:59:27,379 - INFO - [OK] Base de datos Supabase verificada correctamente
+2025-12-24 16:59:28,532 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-12-24 16:59:28,533 - INFO - Conexión a Supabase establecida
+2025-12-24 16:59:35,348 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=%2A&nombre_usuario=eq.admin&activo=eq.True "HTTP/2 200 OK"
+2025-12-24 16:59:35,625 - INFO - [OK] Autenticación exitosa para usuario: admin
+2025-12-24 16:59:35,783 - INFO - HTTP Request: PATCH https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 16:59:35,786 - INFO - Login exitoso: admin (Rol: administrador)
+2025-12-24 16:59:35,787 - INFO - Usuario autenticado: admin
+2025-12-24 16:59:35,945 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/turnos_caja?select=id_turno%2Cfecha_apertura%2Cmonto_inicial&id_usuario=eq.2&cerrado=eq.False "HTTP/2 200 OK"
+2025-12-24 16:59:35,946 - INFO - Usuario tiene turno 10 ya abierto
+2025-12-24 16:59:36,259 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/miembros?select=id_miembro&activo=eq.True "HTTP/2 200 OK"
+2025-12-24 16:59:36,399 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/registro_entradas?select=id_miembro&tipo_acceso=eq.miembro&fecha_entrada=gte.2025-12-24T00%3A00%3A00&fecha_entrada=lte.2025-12-24T23%3A59%3A59 "HTTP/2 200 OK"
+2025-12-24 16:59:36,560 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/lockers?select=id_locker&activo=eq.True "HTTP/2 200 OK"
+2025-12-24 16:59:36,663 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/asignaciones_activas?select=id_locker&activa=eq.True&cancelada=eq.False&id_locker=not.is.null "HTTP/2 200 OK"
+2025-12-24 16:59:36,710 - INFO - Monitor de entradas inicializado (PostgreSQL LISTEN/NOTIFY en localhost:5432)
+2025-12-24 16:59:36,710 - INFO - [OK] Monitor de entradas iniciado (PostgreSQL LISTEN en localhost:5432)
+2025-12-24 16:59:36,711 - INFO - Monitor de entradas iniciado correctamente
+2025-12-24 16:59:40,178 - INFO - Cambio a pestaña: 1
+2025-12-24 16:59:40,773 - ERROR - [ERROR] Error en listener PostgreSQL: connection to server at "localhost" (::1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-12-24 16:59:41,708 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_ubicaciones?select=id_ubicacion%2Cnombre&activa=eq.True&order=nombre.asc "HTTP/2 200 OK"
+2025-12-24 16:59:41,709 - INFO - Cargadas 6 ubicaciones
+2025-12-24 16:59:41,727 - INFO - Abriendo formulario de nuevo producto.
+2025-12-24 17:00:25,641 - INFO - Cambio a pestaña: 1
+2025-12-24 17:00:25,641 - INFO - Volviendo a página de inventario
+2025-12-24 17:00:27,178 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_ubicaciones?select=id_ubicacion%2Cnombre&activa=eq.True&order=nombre.asc "HTTP/2 200 OK"
+2025-12-24 17:00:27,179 - INFO - Cargadas 6 ubicaciones
+2025-12-24 17:00:27,199 - INFO - Abriendo formulario de nuevo producto.
+2025-12-24 17:35:52,872 - INFO - Cambio a pestaña: 1
+2025-12-24 17:35:52,872 - INFO - Volviendo a página de inventario
+2025-12-24 17:35:57,655 - INFO - Abriendo formulario de registro de entrada
+2025-12-24 17:41:08,275 - INFO - Cambio a pestaña: 1
+2025-12-24 17:41:08,276 - INFO - Volviendo a página de inventario
+2025-12-24 17:41:10,298 - INFO - Abriendo formulario de registro de salida
+2025-12-24 17:41:11,731 - INFO - Cambio a pestaña: 1
+2025-12-24 17:41:11,732 - INFO - Volviendo a página de inventario
+2025-12-24 17:41:13,186 - INFO - Ventana de historial de movimientos abierta
+2025-12-24 17:41:14,575 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/movimientos_inventario?select=id_movimiento%2Cfecha%2Ctipo_movimiento%2Ccodigo_interno%2Ctipo_producto%2Ccantidad%2Cstock_anterior%2Cstock_nuevo%2Cmotivo%2Cid_usuario%2Cid_venta&tipo_movimiento=neq.venta&order=fecha.desc&limit=1000 "HTTP/2 200 OK"
+2025-12-24 17:41:14,727 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_productos_varios?select=nombre&codigo_interno=eq.6976425910405 "HTTP/2 200 OK"
+2025-12-24 17:41:14,892 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=nombre_completo&id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 17:41:15,014 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_productos_varios?select=nombre&codigo_interno=eq.6976425910405 "HTTP/2 200 OK"
+2025-12-24 17:41:15,165 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=nombre_completo&id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 17:41:15,294 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_productos_varios?select=nombre&codigo_interno=eq.0123 "HTTP/2 200 OK"
+2025-12-24 17:41:15,437 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=nombre_completo&id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 17:41:15,536 - INFO - Cambio a pestaña: 1
+2025-12-24 17:41:15,537 - INFO - Volviendo a página de inventario
+2025-12-24 17:41:15,560 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_productos_varios?select=nombre&codigo_interno=eq.0123 "HTTP/2 200 OK"
+2025-12-24 17:41:15,667 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=nombre_completo&id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 17:41:15,773 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_productos_varios?select=nombre&codigo_interno=eq.724869007788 "HTTP/2 200 OK"
+2025-12-24 17:41:15,881 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=nombre_completo&id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 17:41:15,986 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_productos_varios?select=nombre&codigo_interno=eq.RUEDAAMRT "HTTP/2 200 OK"
+2025-12-24 17:41:16,109 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=nombre_completo&id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 17:41:16,224 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_productos_varios?select=nombre&codigo_interno=eq.724869007788 "HTTP/2 200 OK"
+2025-12-24 17:41:16,327 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=nombre_completo&id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 17:41:16,416 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_productos_varios?select=nombre&codigo_interno=eq.724869007788 "HTTP/2 200 OK"
+2025-12-24 17:41:16,516 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=nombre_completo&id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 17:41:16,608 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_productos_varios?select=nombre&codigo_interno=eq.724869007788 "HTTP/2 200 OK"
+2025-12-24 17:41:16,706 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=nombre_completo&id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 17:41:16,802 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_productos_varios?select=nombre&codigo_interno=eq.7502258000038 "HTTP/2 200 OK"
+2025-12-24 17:41:16,900 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=nombre_completo&id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 17:41:16,901 - INFO - ✅ Obtuvieron 10 movimientos completos
+2025-12-24 17:46:07,673 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-12-24 17:46:07,677 - INFO - [OK] Conexión exitosa a Supabase
+2025-12-24 17:46:07,798 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-12-24 17:46:07,799 - INFO - [OK] Base de datos Supabase verificada correctamente
+2025-12-24 17:46:08,801 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=id_usuario&limit=1 "HTTP/2 200 OK"
+2025-12-24 17:46:08,803 - INFO - Conexión a Supabase establecida
+2025-12-24 17:46:15,371 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?select=%2A&nombre_usuario=eq.admin&activo=eq.True "HTTP/2 200 OK"
+2025-12-24 17:46:15,649 - INFO - [OK] Autenticación exitosa para usuario: admin
+2025-12-24 17:46:15,767 - INFO - HTTP Request: PATCH https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/usuarios?id_usuario=eq.2 "HTTP/2 200 OK"
+2025-12-24 17:46:15,769 - INFO - Login exitoso: admin (Rol: administrador)
+2025-12-24 17:46:15,770 - INFO - Usuario autenticado: admin
+2025-12-24 17:46:15,904 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/turnos_caja?select=id_turno%2Cfecha_apertura%2Cmonto_inicial&id_usuario=eq.2&cerrado=eq.False "HTTP/2 200 OK"
+2025-12-24 17:46:15,905 - INFO - Usuario tiene turno 10 ya abierto
+2025-12-24 17:46:16,105 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/miembros?select=id_miembro&activo=eq.True "HTTP/2 200 OK"
+2025-12-24 17:46:16,197 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/registro_entradas?select=id_miembro&tipo_acceso=eq.miembro&fecha_entrada=gte.2025-12-24T00%3A00%3A00&fecha_entrada=lte.2025-12-24T23%3A59%3A59 "HTTP/2 200 OK"
+2025-12-24 17:46:16,293 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/lockers?select=id_locker&activo=eq.True "HTTP/2 200 OK"
+2025-12-24 17:46:16,385 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/asignaciones_activas?select=id_locker&activa=eq.True&cancelada=eq.False&id_locker=not.is.null "HTTP/2 200 OK"
+2025-12-24 17:46:16,437 - INFO - Monitor de entradas inicializado (PostgreSQL LISTEN/NOTIFY en localhost:5432)
+2025-12-24 17:46:16,437 - INFO - [OK] Monitor de entradas iniciado (PostgreSQL LISTEN en localhost:5432)
+2025-12-24 17:46:16,438 - INFO - Monitor de entradas iniciado correctamente
+2025-12-24 17:46:20,483 - ERROR - [ERROR] Error en listener PostgreSQL: connection to server at "localhost" (::1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+
+2025-12-24 18:07:48,309 - INFO - Cambio a pestaña: 1
+2025-12-24 18:07:49,692 - INFO - Cambio a pestaña: 2
+2025-12-24 18:07:51,005 - INFO - Cambio a pestaña: 3
+2025-12-24 18:07:52,535 - INFO - Cambio a pestaña: 4
+2025-12-24 18:07:53,561 - INFO - Cambio a pestaña: 3
+2025-12-24 18:07:54,585 - INFO - Cambio a pestaña: 2
+2025-12-24 18:07:55,634 - INFO - Cambio a pestaña: 1
+2025-12-24 18:07:56,760 - INFO - Cambio a pestaña: 0
+2025-12-24 18:08:00,567 - INFO - Cambio a pestaña: 1
+2025-12-24 18:08:01,879 - INFO - HTTP Request: GET https://ufnmqxyvrfionysjeiko.supabase.co/rest/v1/ca_ubicaciones?select=id_ubicacion%2Cnombre&activa=eq.True&order=nombre.asc "HTTP/2 200 OK"
+2025-12-24 18:08:01,880 - INFO - Cargadas 6 ubicaciones
+2025-12-24 18:08:01,896 - INFO - Abriendo formulario de nuevo producto.
+2025-12-24 18:08:13,756 - INFO - Formulario limpiado
+2025-12-24 18:08:46,603 - INFO - Cambio a pestaña: 1
+2025-12-24 18:08:46,603 - INFO - Volviendo a página de inventario
+2025-12-24 18:08:48,812 - INFO - Cambio a pestaña: 1
+2025-12-24 18:08:50,027 - INFO - Cambio a pestaña: 1
+2025-12-24 18:08:50,556 - INFO - Cambio a pestaña: 1
+2025-12-24 18:08:51,626 - INFO - Cambio a pestaña: 2
+2025-12-24 18:08:52,833 - INFO - Cambio a pestaña: 3
+2025-12-24 18:08:54,001 - INFO - Cambio a pestaña: 4
+2025-12-24 18:08:54,892 - INFO - Cambio a pestaña: 3
+2025-12-24 18:08:56,188 - INFO - Cambio a pestaña: 0

@@ -1,6 +1,6 @@
 """
 Aplicación Principal del POS HTF Gimnasio
-Sistema de Punto de Venta con sincronización offline
+Sistema de Punto de Venta con backend Supabase (requiere conexión a Internet)
 Usando PySide6 para la interfaz
 """
 
@@ -22,10 +22,13 @@ logging.basicConfig(
 )
 
 # Configurar encoding UTF-8 para stdout/stderr en Windows
+# Solo si stdout/stderr existen (pueden ser None en ejecutables --windowed)
 if sys.platform == 'win32':
     import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    if sys.stdout and hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    if sys.stderr and hasattr(sys.stderr, 'buffer'):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 try:
     from ui.login_window_pyside import LoginWindow
