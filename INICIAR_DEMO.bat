@@ -6,7 +6,7 @@ echo.
 echo Iniciando aplicacion...
 echo.
 
-cd dist
+cd dist_app\HTF_Gimnasio_POS
 start HTF_Gimnasio_POS.exe
 
 echo.

@@ -1,22 +1,27 @@
+# Variables de entorno (contiene credenciales sensibles - NO SUBIR)
 .env
-.env.example
+.env.local
+.env.*.local
 
-# PyInstaller
-build/
-dist/
-*.spec
-*.exe
-
-# Python
+# Archivos compilados de Python (se regeneran automáticamente)
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
 
-# IDE
-.vscode/
-.idea/
-
-# OS
+# Archivos del sistema operativo
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# NOTA: Configuración conservadora para no perder nada
+# Los siguientes NO se ignoran para preservar todo en git:
+# - Logs (pos_htf.log, build.log, test_sync_output.log, etc.)
+# - Build artifacts (build_app/, dist_app/, etc.)
+# - Archivos temporales (.txt temporales, etc.)
+# - Archivos .spec de PyInstaller (spec_app/)
+# - Ejecutables (.exe)
+# 
+# Esto permite que todo esté respaldado en git en caso de resetear la computadora
+# Solo se ignoran archivos sensibles (.env) y compilados de Python (__pycache__)

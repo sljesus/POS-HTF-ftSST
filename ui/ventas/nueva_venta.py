@@ -35,8 +35,8 @@ from ui.components import (
 )
 
 # Importar gestores de impresión
-from escpos_printer import TicketPrinter
-from windows_printer_manager import TicketPrinterWindows, WindowsPrinterManager
+from services.printers.escpos_printer import TicketPrinter
+from services.printers.windows_printer_manager import TicketPrinterWindows, WindowsPrinterManager
 
 
 class NuevaVentaWindow(QWidget):
